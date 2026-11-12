@@ -1,0 +1,22 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "charts": [
+    {
+      "chart_id": "bad",
+      "chart_type": "metric_history",
+      "series": [
+        {
+          "label": "mid",
+          "observation_ids": [
+            "o1",
+            "o2",
+            "ghost"
+          ]
+        }
+      ],
+      "title": "Mid"
+    }
+  ],
+  "mission_id": "B10",
+  "schema": "research-intelligence-report.v1"
+}

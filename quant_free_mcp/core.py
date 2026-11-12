@@ -3,14 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from threading import Lock
-from time import monotonic
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 import json
+import os
 import re
+
+from . import acquisition as _acq
 
 ORIGINS = {
     'binance_spot': 'https://data-api.binance.vision',
@@ -90,26 +91,30 @@ class NoRedirect(HTTPRedirectHandler):
         raise ValueError('redirect_forbidden')
 
 
-class RateBucket:
-    """Conservative per-provider minimum time between calls; no IP or host rotation."""
-    def __init__(self):
-        self.lock = Lock()
-        self.next_at: dict[str, float] = {}
-    def check(self, provider: str):
-        gap = {'binance_spot': .4, 'binance_usdm': .6, 'dexscreener': .5,
-               'defillama': 1.0, 'mempool': 1.0}[provider]
-        with self.lock:
-            now = monotonic()
-            if now < self.next_at.get(provider, 0):
-                raise RuntimeError('local_rate_limit')
-            self.next_at[provider] = now + gap
-
-_BUCKET = RateBucket()
 _OPENER = build_opener(NoRedirect())
+_ACQUIRER: _acq.Acquirer | None = None
 
 
-def fetch(route: str, *, params: dict[str, str | int] | None = None, parts: dict[str,str] | None = None) -> tuple[Any, dict[str,Any]]:
-    """Fixed-route GET only. No redirects; bounded payload; fail closed on malformed JSON."""
+def set_acquirer(acquirer: '_acq.Acquirer | None') -> None:
+    """Dependency-injection seam for tests and embedding; None restores the default."""
+    global _ACQUIRER
+    _ACQUIRER = acquirer
+
+
+def get_acquirer() -> '_acq.Acquirer':
+    """Default: bounded retry, quota, breaker, no redirects. SQLite caching is opt-in via
+    QUANT_FREE_MCP_CACHE_PATH (a local file path; never a secret or URL)."""
+    global _ACQUIRER
+    if _ACQUIRER is None:
+        cache_path = os.environ.get('QUANT_FREE_MCP_CACHE_PATH')
+        _ACQUIRER = _acq.Acquirer(_acq.default_transport(_OPENER),
+                                  cache=_acq.ResponseCache(cache_path) if cache_path else None)
+    return _ACQUIRER
+
+
+def build_url(route: str, params: dict[str, str | int] | None = None,
+              parts: dict[str, str] | None = None) -> tuple[str, str, str]:
+    """Validate a fixed route and return (provider, path, url). No other URL can be formed."""
     if route not in ROUTES:
         raise ValueError('unsupported_route')
     provider, path = ROUTES[route]
@@ -138,30 +143,29 @@ def fetch(route: str, *, params: dict[str, str | int] | None = None, parts: dict
         raise ValueError('invalid_interval')
     if 'q' in args and (not isinstance(args['q'],str) or not 2<=len(args['q'])<=80):
         raise ValueError('invalid_search_query')
-    url = ORIGINS[provider] + path + ('?' + urlencode(args) if args else '')
-    _BUCKET.check(provider)
-    request = Request(url, headers={'Accept':'application/json', 'User-Agent':'quant-free-mcp/0.1'}, method='GET')
-    try:
-        with _OPENER.open(request, timeout=12) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f'upstream_http_{resp.status}')
-            if 'json' not in resp.headers.get('Content-Type','').lower():
-                # Bitcoin tip height intentionally returns plain text.
-                if route != 'btc_tip': raise ValueError('invalid_content_type')
-            data = resp.read(MAX_BYTES + 1)
-            if len(data) > MAX_BYTES:
-                raise ValueError('response_too_large')
-    except HTTPError as exc:
-        raise RuntimeError('rate_limited' if exc.code == 429 else f'upstream_http_{exc.code}') from exc
-    except URLError as exc:
-        raise RuntimeError('network_unavailable') from exc
+    return provider, path, ORIGINS[provider] + path + ('?' + urlencode(args) if args else '')
+
+
+def fetch(route: str, *, params: dict[str, str | int] | None = None, parts: dict[str,str] | None = None,
+          allow_stale: bool = False) -> tuple[Any, dict[str,Any]]:
+    """Fixed-route GET only. No redirects; bounded payload/retries; fail closed on malformed JSON.
+
+    ``source['cache']`` states whether the body is LIVE, FRESH_CACHE or (opt-in) STALE_CACHE;
+    ``retrieved_at_utc`` is always the original network retrieval time."""
+    provider, path, url = build_url(route, params, parts)
+    result = get_acquirer().get(provider, route, url, allow_stale=allow_stale, require_json=route != 'btc_tip')
+    data = result.body
+    if len(data) > MAX_BYTES:
+        raise ValueError('response_too_large')
     if route == 'btc_tip':
         try: body = int(data.strip())
         except ValueError as exc: raise ValueError('schema_changed') from exc
     else:
         try: body = json.loads(data)
         except (UnicodeError, json.JSONDecodeError) as exc: raise ValueError('schema_changed') from exc
-    return body, {'provider':provider,'origin':ORIGINS[provider], 'endpoint':path,'retrieved_at_utc':utcnow(), 'route':route}
+    return body, {'provider':provider,'origin':ORIGINS[provider], 'endpoint':path,
+                  'retrieved_at_utc':_acq.iso(result.retrieved_at), 'route':route,
+                  'cache':result.cache, 'attempts':result.attempts}
 
 
 def envelope(metric: str, instrument_id: str, value: Any, unit: str, source: dict[str,Any],
@@ -177,7 +181,7 @@ def envelope(metric: str, instrument_id: str, value: Any, unit: str, source: dic
 def unavailable(metric: str, instrument: str, exc: Exception) -> dict[str,Any]:
     reason = str(exc)
     status = ('invalid_request' if isinstance(exc,ValueError) and reason.startswith(('invalid_','unsupported_','missing_'))
-              else 'rate_limited' if reason in ('rate_limited','local_rate_limit') else
+              else 'rate_limited' if reason in ('rate_limited','local_rate_limit','quota_exceeded') else
               'schema_changed' if reason in ('schema_changed','invalid_content_type','response_too_large') else 'unavailable')
     return {'schema_version':'1.0','status':status,'metric':metric,'instrument_id':instrument,
             'value':None,'unit':None,'observation_time_utc':None,'retrieved_at_utc':utcnow(),

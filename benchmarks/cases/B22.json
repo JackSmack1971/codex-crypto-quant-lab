@@ -1,0 +1,38 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B22",
+  "version": "1",
+  "title": "Repeated identical benchmark run with deterministic canonical artifacts",
+  "harness": "repeat",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [],
+  "scenario": {
+    "repeat_of": "B01",
+    "runs": 2
+  },
+  "expected": {
+    "reproducibility": {
+      "identical_artifacts": [
+        "report.md",
+        "report.html",
+        "report_content.json",
+        "report_manifest.json",
+        "mission.json",
+        "evidence.json",
+        "final_verification.json"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim",
+    "wall-clock metadata is excluded by design from canonical artifacts"
+  ]
+}

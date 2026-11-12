@@ -1,0 +1,74 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "case_id": "B27",
+  "expected": {
+    "diagnostics": {
+      "codes_absent": [
+        "VERIFICATION_FAILED",
+        "OPERATION_ERROR"
+      ],
+      "codes_present": [
+        "CONTRADICTORY"
+      ]
+    },
+    "evidence_references": {
+      "must_not_resolve": [],
+      "required_ids": [
+        "o9"
+      ]
+    },
+    "missing_data": {
+      "grade": "INSUFFICIENT_EVIDENCE / NO_TRADE",
+      "no_claims": [],
+      "unavailable_claims": [
+        "U:binance:spot:BTCUSDT|spot.quote.mid"
+      ]
+    },
+    "process": {
+      "completion_state": "COMPLETE",
+      "job_state": "COMPLETED",
+      "research_state": "INSUFFICIENT_EVIDENCE",
+      "stage": "FINALIZING"
+    }
+  },
+  "fixtures": [
+    {
+      "dest": "inputs/B27/run.json",
+      "sha256": "eff34b21ef48abc6b974b4c5a9e1e7f0bfe968b61d900a18ea9c0638913ee51b",
+      "source": "benchmarks/fixtures/B27/run.json"
+    },
+    {
+      "dest": "inputs/B27/methodology_reviewer.json",
+      "sha256": "52c6030704215cecb74bbedcdff58b5ab6a57fee8f7d377428d308a8bd7d61c9",
+      "source": "benchmarks/fixtures/B27/methodology_reviewer.json"
+    },
+    {
+      "dest": "inputs/B27/source_verifier.json",
+      "sha256": "6f70c38779161f91bca64117bc0332794e482fea9b2e27ac216595dff97c66dc",
+      "source": "benchmarks/fixtures/B27/source_verifier.json"
+    },
+    {
+      "dest": "inputs/B27/spec.json",
+      "sha256": "5455dcd25cd1fd73bb338147f66bd9c976cf435609ef95e4244d5a362b087890",
+      "source": "benchmarks/fixtures/B27/spec.json"
+    }
+  ],
+  "harness": "mission",
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ],
+  "scenario": {
+    "spec": "inputs/B27/spec.json"
+  },
+  "schema": "research-benchmark-case.v1",
+  "title": "Contradictory values at one instant written with different UTC spellings",
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "version": "1"
+}

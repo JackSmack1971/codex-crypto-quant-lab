@@ -1,0 +1,73 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "case_id": "B26",
+  "expected": {
+    "holdout": {
+      "error_overlap": "HOLDOUT_ALREADY_EXPOSED",
+      "error_relabel": "HOLDOUT_ALREADY_EXPOSED",
+      "error_repeat": "HOLDOUT_ALREADY_EXPOSED",
+      "holdout_exposure_count": 1,
+      "independent_evaluation": true,
+      "overlap": null,
+      "relabel": null,
+      "repeat": null,
+      "status": "CONSUMED"
+    }
+  },
+  "fixtures": [
+    {
+      "dest": "inputs/B26/dataset.json",
+      "sha256": "d3fdae803d352fa425a3d83834380a0737a8b6cca7a3f37827a6651a8e81cc4e",
+      "source": "benchmarks/fixtures/B20/dataset.json"
+    }
+  ],
+  "harness": "registry",
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ],
+  "scenario": {
+    "dataset": "inputs/B26/dataset.json",
+    "steps": [
+      {
+        "op": "register"
+      },
+      {
+        "op": "evaluate"
+      },
+      {
+        "label": "repeat",
+        "op": "register_expect_error",
+        "plan_override": {
+          "experiment_id": "exp-2"
+        }
+      },
+      {
+        "label": "overlap",
+        "op": "register_expect_error",
+        "plan_override": {
+          "experiment_id": "exp-3",
+          "holdout_start": 10
+        }
+      },
+      {
+        "dataset_version": "2027.01-relabel",
+        "label": "relabel",
+        "op": "register_expect_error",
+        "plan_override": {
+          "experiment_id": "exp-4"
+        }
+      }
+    ]
+  },
+  "schema": "research-benchmark-case.v1",
+  "title": "Overlapping and relabelled holdouts are reuse, not independent evaluations",
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "version": "1"
+}

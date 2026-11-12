@@ -1,0 +1,102 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "case_id": "B29",
+  "expected": {
+    "diagnostics": {
+      "codes_absent": [
+        "VERIFICATION_FAILED",
+        "OPERATION_ERROR"
+      ]
+    },
+    "evidence_references": {
+      "companions": {
+        "clean": "SEMANTICALLY_VERIFIED",
+        "forged_d": "FAILED",
+        "forged_r": "FAILED",
+        "history_d": "BUNDLE_INVALID",
+        "history_r": "BUNDLE_INVALID"
+      },
+      "must_not_resolve": [],
+      "required_ids": [
+        "o1",
+        "o2"
+      ]
+    },
+    "process": {
+      "completion_state": "COMPLETE",
+      "job_state": "COMPLETED",
+      "research_state": "NOT_EVALUABLE",
+      "stage": "FINALIZING"
+    }
+  },
+  "fixtures": [
+    {
+      "dest": "inputs/B29/run.json",
+      "sha256": "f5df42da7f5ad48034d2e4a4f0bd9a9c34014f48db6efa6228eaf9780037455a",
+      "source": "benchmarks/fixtures/B29/run.json"
+    },
+    {
+      "dest": "inputs/B29/methodology_reviewer.json",
+      "sha256": "571b747a8f6d68d44956ee7677a85c2f3f9d353b320799ec884ccee11ff356b6",
+      "source": "benchmarks/fixtures/B29/methodology_reviewer.json"
+    },
+    {
+      "dest": "inputs/B29/source_verifier.json",
+      "sha256": "7c38848fb2991f0044d46a7be1bca5768e298f65d08a378b3c60a1c44c4f10e3",
+      "source": "benchmarks/fixtures/B29/source_verifier.json"
+    },
+    {
+      "dest": "inputs/B29/report_input.json",
+      "sha256": "8daced2393c0e6d5a8526ff3b84d26d1a5d4fece2f204f6bd816d5698fce0fc8",
+      "source": "benchmarks/fixtures/B29/report_input.json"
+    },
+    {
+      "dest": "inputs/B29/spec.json",
+      "sha256": "398f7df5208e87a686e0bcc2f36ac11556f79657f5b80e47d1b8bd8403928c30",
+      "source": "benchmarks/fixtures/B29/spec.json"
+    }
+  ],
+  "harness": "mission",
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ],
+  "scenario": {
+    "spec": "inputs/B29/spec.json",
+    "steps": [
+      {
+        "op": "run_to_end"
+      },
+      {
+        "claim_id": "R:o1",
+        "field": "value",
+        "label": "r",
+        "op": "forge_companion",
+        "rewrite": {
+          "100": "500"
+        },
+        "value": "500"
+      },
+      {
+        "claim_id": "D:d",
+        "field": "value",
+        "label": "d",
+        "op": "forge_companion",
+        "rewrite": {
+          "12": "999"
+        },
+        "value": "999"
+      }
+    ]
+  },
+  "schema": "research-benchmark-case.v1",
+  "title": "Forged report companion with recomputed hashes is rejected and refused by history",
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "version": "1"
+}

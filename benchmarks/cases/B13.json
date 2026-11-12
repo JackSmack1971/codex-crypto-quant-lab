@@ -1,0 +1,96 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B13",
+  "version": "1",
+  "title": "Report section with unavailable required metrics",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B13/run.json",
+      "dest": "inputs/B13/run.json",
+      "sha256": "74dfdbf2ac818eb5a330f918530eaa0eb2fd5db85566ffe68dafd1bc548d3e70"
+    },
+    {
+      "source": "benchmarks/fixtures/B13/methodology_reviewer.json",
+      "dest": "inputs/B13/methodology_reviewer.json",
+      "sha256": "52c6030704215cecb74bbedcdff58b5ab6a57fee8f7d377428d308a8bd7d61c9"
+    },
+    {
+      "source": "benchmarks/fixtures/B13/source_verifier.json",
+      "dest": "inputs/B13/source_verifier.json",
+      "sha256": "6f70c38779161f91bca64117bc0332794e482fea9b2e27ac216595dff97c66dc"
+    },
+    {
+      "source": "benchmarks/fixtures/B13/report_input.json",
+      "dest": "inputs/B13/report_input.json",
+      "sha256": "7d6f6a70b094b6a3c9f6f9775292ca8d6fabdfcfa15d9dfca2b6263039f875e0"
+    },
+    {
+      "source": "benchmarks/fixtures/B13/spec.json",
+      "dest": "inputs/B13/spec.json",
+      "sha256": "8d11ca88622af54ddeede69ad1e2cbd580259292bfa1fc41907e35f6ed973f67"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B13/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "INSUFFICIENT_EVIDENCE",
+      "completion_state": "COMPLETE"
+    },
+    "diagnostics": {
+      "codes_present": [],
+      "codes_absent": [
+        "VERIFICATION_FAILED",
+        "OPERATION_ERROR"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o9"
+      ]
+    },
+    "missing_data": {
+      "unavailable_claims": [
+        "U:binance:spot:BTCUSDT|spot.quote.mid"
+      ],
+      "no_claims": [],
+      "grade": "INSUFFICIENT_EVIDENCE / NO_TRADE"
+    },
+    "report_contract": {
+      "sections": [
+        "missing data",
+        "scenarios"
+      ],
+      "md_contains": [
+        "UNAVAILABLE",
+        "Not produced",
+        "NO_TRADE",
+        "INSUFFICIENT_EVIDENCE"
+      ],
+      "md_absent": [],
+      "claim_classes_present": [
+        "U",
+        "R"
+      ],
+      "claim_classes_absent": [
+        "D"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

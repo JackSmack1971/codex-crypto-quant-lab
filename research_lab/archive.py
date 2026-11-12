@@ -24,6 +24,18 @@ CREATE TABLE IF NOT EXISTS snapshots (
 '''
 
 
+class EvidenceMissing(ContractError):
+    """No observation/snapshot with the requested id exists."""
+
+
+class ArchiveIntegrityError(ContractError):
+    """A row exists but is corrupt: digest mismatch, undecodable content or invalid record."""
+
+
+class ArchiveDatabaseError(ContractError):
+    """The SQLite layer failed (not a database, locked, I/O). Distinct from absence and corruption."""
+
+
 class EvidenceArchive:
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -57,14 +69,22 @@ class EvidenceArchive:
         return h
 
     def get(self, id: str) -> Observation:
-        with self.connect() as db:
-            row = db.execute('SELECT content,sha256 FROM observations WHERE id=?',(id,)).fetchone()
+        try:
+            with self.connect() as db:
+                row = db.execute('SELECT content,sha256 FROM observations WHERE id=?',(id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise ArchiveDatabaseError(f'archive database error: {type(exc).__name__}') from exc
         if row is None:
-            raise ContractError('observation missing')
-        obj = json.loads(row[0])
-        if digest(obj) != row[1]:
-            raise ContractError('archive integrity mismatch')
-        return Observation(**obj)
+            raise EvidenceMissing('observation missing')
+        try:
+            obj = json.loads(row[0])
+            if digest(obj) != row[1]:
+                raise ArchiveIntegrityError('archive integrity mismatch')
+            return Observation(**obj)
+        except ArchiveIntegrityError:
+            raise
+        except (ValueError, TypeError, ContractError) as exc:  # undecodable JSON, wrong fields, invalid record
+            raise ArchiveIntegrityError(f'archive record invalid: {type(exc).__name__}') from exc
 
     def as_of(self, instrument_id: str, metric: str, cutoff_utc: str) -> list[Observation]:
         _utc(cutoff_utc)

@@ -1,0 +1,68 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "completion_requirements": {
+    "accepted_research_states": [
+      "NOT_EVALUABLE",
+      "INSUFFICIENT_EVIDENCE",
+      "EVALUABLE"
+    ],
+    "required_reviews": [
+      "methodology_reviewer",
+      "source_verifier"
+    ]
+  },
+  "decision_question": "Is the recorded BTCUSDT mid evidence set eligible for a research assessment?",
+  "hypotheses": [
+    {
+      "contradicting_signal_ids": [],
+      "id": "h1",
+      "required_metrics": [
+        "spot.quote.mid"
+      ],
+      "supporting_signal_ids": [
+        "s1"
+      ]
+    }
+  ],
+  "inputs": {
+    "research_run": {
+      "path": "inputs/B17/run.json",
+      "sha256": "66dd2a7bfe9a69584de4c8435a7c64127f5e2cc2dbf0d67074bf168602cb52f3"
+    },
+    "reviewer_handoffs": {
+      "methodology_reviewer": {
+        "path": "inputs/B17/methodology_reviewer.json",
+        "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+      },
+      "source_verifier": {
+        "path": "inputs/B17/source_verifier.json",
+        "sha256": "e7451fb61f6bda22e2034e3f5e08f793be5ef8c67d23fe09823cbb7c85dd2fce"
+      }
+    }
+  },
+  "instruments": [
+    "binance:spot:BTCUSDT"
+  ],
+  "max_age_seconds": 7200,
+  "mission_id": "B17",
+  "output_dir": "missions/B17",
+  "permitted_operations": [
+    "plan.freeze_spec",
+    "acquire.local_inputs",
+    "reconcile.sources",
+    "analyze.hypotheses",
+    "verify.stage_artifacts",
+    "render.local_report",
+    "finalize.bundle"
+  ],
+  "provider_operations": [],
+  "required_metrics": [
+    {
+      "instrument_id": "binance:spot:BTCUSDT",
+      "metric": "spot.quote.mid",
+      "unit": "USDT"
+    }
+  ],
+  "research_horizon": "1d",
+  "schema": "research-mission-execution.v1"
+}

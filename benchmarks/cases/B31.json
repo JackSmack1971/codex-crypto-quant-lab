@@ -1,0 +1,34 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "case_id": "B31",
+  "expected": {
+    "reproducibility": {
+      "identical_artifacts": [
+        "report_content.json",
+        "report_manifest.json",
+        "mission.json",
+        "evidence.json"
+      ]
+    }
+  },
+  "fixtures": [],
+  "harness": "repeat",
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ],
+  "scenario": {
+    "repeat_of": "B29",
+    "runs": 2
+  },
+  "schema": "research-benchmark-case.v1",
+  "title": "Clean-workspace reproducibility of the companion verification case",
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "version": "1"
+}

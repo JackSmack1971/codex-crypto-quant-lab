@@ -1,0 +1,15 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "derived_claims": [
+    {
+      "claim_id": "fchg",
+      "input_evidence_ids": [
+        "f1",
+        "f2"
+      ],
+      "transform": "pct_change"
+    }
+  ],
+  "mission_id": "B23",
+  "schema": "research-intelligence-report.v1"
+}

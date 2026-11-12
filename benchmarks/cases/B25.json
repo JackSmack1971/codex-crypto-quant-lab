@@ -1,0 +1,75 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B25",
+  "version": "1",
+  "title": "Chart must not plot an observation excluded as future-dated",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B25/run.json",
+      "dest": "inputs/B25/run.json",
+      "sha256": "62d2094b697b402c2ec1af5c88eb743586e992b2ff926a15b230ea160980181e"
+    },
+    {
+      "source": "benchmarks/fixtures/B25/methodology_reviewer.json",
+      "dest": "inputs/B25/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B25/source_verifier.json",
+      "dest": "inputs/B25/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B25/report_input.json",
+      "dest": "inputs/B25/report_input.json",
+      "sha256": "9dece00276913840936b047b43df2eabc88be6435bdb44818b576292eec99262"
+    },
+    {
+      "source": "benchmarks/fixtures/B25/spec.json",
+      "dest": "inputs/B25/spec.json",
+      "sha256": "c5171a9228e630cf31d218f7f0da3a103cf9df9a47eea9dc9fdfceb00a8d4f6a"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B25/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "FAILED",
+      "stage": "RENDERING"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "CHART_SAMPLE_INELIGIBLE",
+        "FUTURE_DATED"
+      ],
+      "codes_absent": [
+        "COMPLETION_REQUIREMENT_UNMET"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o2"
+      ]
+    },
+    "chart_lineage": {
+      "rejected_any_of": [
+        "CHART_SAMPLE_INELIGIBLE"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

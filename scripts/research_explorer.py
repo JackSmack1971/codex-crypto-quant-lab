@@ -6,10 +6,13 @@ import json
 import math
 import sys
 from urllib.parse import urlsplit
-from datetime import datetime
 from pathlib import Path
 from html import escape
 from hashlib import sha256
+
+ROOT=Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
+from research_lab.charts import parse_utc_z,scale_points  # noqa: E402  shared with the evidence-bound report charts
 
 def render(input_path:Path,output_path:Path):
     payload=json.loads(input_path.read_text(encoding='utf8'))
@@ -27,13 +30,11 @@ def render(input_path:Path,output_path:Path):
             raise ValueError('unaligned timestamps or insufficient samples')
         if not all(type(v) in (int,float) and math.isfinite(v) for v in values):raise ValueError('invalid value')
         for timestamp in times:
-            try:
-                parsed=datetime.fromisoformat(timestamp.replace('Z','+00:00'))
-                if parsed.utcoffset() is None or parsed.utcoffset().total_seconds()!=0:raise ValueError()
+            try:parse_utc_z(timestamp)
             except (ValueError,AttributeError):raise ValueError('timestamps must be ISO-8601 UTC')
         if len(series['observation_ids'])!=len(values):raise ValueError('each sample requires evidence ID')
         low=min(values);high=max(values);span=high-low or 1
-        points=' '.join(f'{35+i*730/(len(values)-1):.2f},{175-(v-low)/span*145:.2f}' for i,v in enumerate(values))
+        points=scale_points(values)
         name=escape(series['name']);unit=escape(series['units']);src=escape(series['source_uri'],quote=True)
         plots.append(f'<section><h2>{name}</h2><p>Units: {unit}. Method: {escape(series["method"])}. <a href="{src}" rel="noopener noreferrer">Evidence source</a>.</p>'
                      f'<svg viewBox="0 0 800 210" role="img" aria-label="{name} series from {escape(times[0])} to {escape(times[-1])}, minimum {low:g}, maximum {high:g}">'

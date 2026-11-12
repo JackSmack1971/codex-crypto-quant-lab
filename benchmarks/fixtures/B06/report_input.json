@@ -1,0 +1,15 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "corroborations": [
+    {
+      "assertion": "INDEPENDENT",
+      "evidence_ids": [
+        "o1",
+        "o1b"
+      ],
+      "id": "corr1"
+    }
+  ],
+  "mission_id": "B06",
+  "schema": "research-intelligence-report.v1"
+}

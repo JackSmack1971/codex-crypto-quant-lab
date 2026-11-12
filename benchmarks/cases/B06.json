@@ -1,0 +1,70 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B06",
+  "version": "1",
+  "title": "Shared underlying provider falsely presented as independent corroboration",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B06/run.json",
+      "dest": "inputs/B06/run.json",
+      "sha256": "4c1fcc3e93968241bf5a8e77d751cf7a3a3106d9f4f39d9022591366029aa01d"
+    },
+    {
+      "source": "benchmarks/fixtures/B06/methodology_reviewer.json",
+      "dest": "inputs/B06/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B06/source_verifier.json",
+      "dest": "inputs/B06/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B06/report_input.json",
+      "dest": "inputs/B06/report_input.json",
+      "sha256": "10d00468e51093bb6cf2e4deca7485ed5530339e4fc20b12d80aa6d8af2f7426"
+    },
+    {
+      "source": "benchmarks/fixtures/B06/spec.json",
+      "dest": "inputs/B06/spec.json",
+      "sha256": "b41ae6de80f7780995eec89878b9cbe35e289872b6c7f36b62ec180bb1eee1e9"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B06/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "FAILED",
+      "stage": "RENDERING"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "CORROBORATION_NOT_INDEPENDENT"
+      ],
+      "codes_absent": [
+        "COMPLETION_REQUIREMENT_UNMET"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o1b"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state",
+    "independent corroboration"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

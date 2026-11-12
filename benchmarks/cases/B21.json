@@ -1,0 +1,49 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B21",
+  "version": "1",
+  "title": "Valid experiment registration and consumed holdout",
+  "harness": "registry",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B21/dataset.json",
+      "dest": "inputs/B21/dataset.json",
+      "sha256": "d3fdae803d352fa425a3d83834380a0737a8b6cca7a3f37827a6651a8e81cc4e"
+    }
+  ],
+  "scenario": {
+    "dataset": "inputs/B21/dataset.json",
+    "steps": [
+      {
+        "op": "register"
+      },
+      {
+        "op": "evaluate"
+      }
+    ]
+  },
+  "expected": {
+    "holdout": {
+      "register_exp-1": "REGISTERED",
+      "evaluate_status": "CONSUMED",
+      "status": "CONSUMED",
+      "independent_evaluation": true,
+      "holdout_exposure_count": 1,
+      "holdout_untouched": false,
+      "result_digest_present": true
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state",
+    "statistical significance of the holdout result"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

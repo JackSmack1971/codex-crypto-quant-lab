@@ -1,0 +1,15 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "derived_claims": [
+    {
+      "claim_id": "bad",
+      "input_evidence_ids": [
+        "old",
+        "o1"
+      ],
+      "transform": "difference"
+    }
+  ],
+  "mission_id": "B24",
+  "schema": "research-intelligence-report.v1"
+}

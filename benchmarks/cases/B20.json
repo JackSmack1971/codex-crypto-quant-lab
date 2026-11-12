@@ -1,0 +1,52 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B20",
+  "version": "1",
+  "title": "Reused holdout presented as independent evaluation",
+  "harness": "registry",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B20/dataset.json",
+      "dest": "inputs/B20/dataset.json",
+      "sha256": "d3fdae803d352fa425a3d83834380a0737a8b6cca7a3f37827a6651a8e81cc4e"
+    }
+  ],
+  "scenario": {
+    "dataset": "inputs/B20/dataset.json",
+    "steps": [
+      {
+        "op": "register"
+      },
+      {
+        "op": "evaluate"
+      },
+      {
+        "op": "register_expect_error",
+        "plan_override": {
+          "experiment_id": "exp-2"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "holdout": {
+      "error_register_expect_error": "HOLDOUT_ALREADY_EXPOSED",
+      "second_registration": null,
+      "status": "CONSUMED",
+      "holdout_exposure_count": 1
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state",
+    "untouched holdout after exposure"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

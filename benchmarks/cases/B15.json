@@ -1,0 +1,100 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B15",
+  "version": "1",
+  "title": "Recovery after artifact write but before state commit",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B15/run.json",
+      "dest": "inputs/B15/run.json",
+      "sha256": "2f96e022a474c1f4cb4f4779e08b224c29a18a183609444687e4a7b84e14c69f"
+    },
+    {
+      "source": "benchmarks/fixtures/B15/methodology_reviewer.json",
+      "dest": "inputs/B15/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B15/source_verifier.json",
+      "dest": "inputs/B15/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B15/report_input.json",
+      "dest": "inputs/B15/report_input.json",
+      "sha256": "bcaf6ccbaaf38d2f349a455ba79ba7adcca7609c4948fe4c3ea8e25d88ab4ab5"
+    },
+    {
+      "source": "benchmarks/fixtures/B15/spec.json",
+      "dest": "inputs/B15/spec.json",
+      "sha256": "56f69e12fc0cbddcdfd206b9f23a8962a5c91acd1eed66a1ec5250b36505c8fe"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B15/spec.json",
+    "steps": [
+      {
+        "op": "advance",
+        "count": 3
+      },
+      {
+        "op": "crash",
+        "point": "after_artifact_write",
+        "stage": "ANALYZING"
+      },
+      {
+        "op": "reconcile"
+      },
+      {
+        "op": "run_to_end"
+      }
+    ]
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "EVALUABLE",
+      "completion_state": "COMPLETE"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "RECOVERY_RECONCILIATION_REQUIRED"
+      ],
+      "codes_absent": [
+        "UNSAFE_REPLAY_BLOCKED",
+        "STAGE_OUTPUT_DIGEST_MISMATCH"
+      ]
+    },
+    "recovery": {
+      "crashed_at": "ANALYZING",
+      "crash_point": "after_artifact_write",
+      "advance_after_crash": "RECONCILIATION_REQUIRED",
+      "reconcile_classification": "COMPLETE",
+      "reconcile_decision": "ADOPTED_VERIFIED_OUTPUT",
+      "final_job_state": "COMPLETED",
+      "stage_status": "SUCCEEDED",
+      "stage_attempts": 2
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o2",
+        "o3"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

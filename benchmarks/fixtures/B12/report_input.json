@@ -1,0 +1,21 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "interpretations": [
+    {
+      "assumptions": [
+        "Demand persists."
+      ],
+      "claim_refs": [
+        "R:o1"
+      ],
+      "falsifiers": [
+        "Demand fades."
+      ],
+      "id": "sc-bull",
+      "stance": "bull",
+      "text": "The mid will reach 150 next week."
+    }
+  ],
+  "mission_id": "B12",
+  "schema": "research-intelligence-report.v1"
+}

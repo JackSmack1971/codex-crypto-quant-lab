@@ -31,6 +31,18 @@ def _utc(value: str) -> datetime:
     return date
 
 
+def instant_key(value: str) -> str:
+    """Canonical identity of a UTC instant: ``Z`` and ``+00:00`` spellings and equivalent fractional seconds map
+    to one fixed-width string, so equal text order == equal time order. Fails closed (ContractError) on missing,
+    malformed or non-UTC input. The original spelling is never rewritten in stored evidence; this key is used only
+    to *compare*, group and order instants."""
+    return _utc(value).astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+
+def same_instant(a: str, b: str) -> bool:
+    return _utc(a) == _utc(b)
+
+
 def _decimal(value: str) -> Decimal:
     if not isinstance(value, str):
         raise ContractError('numeric values must be decimal strings')

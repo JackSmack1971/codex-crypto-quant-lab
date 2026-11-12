@@ -1,0 +1,62 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "observations": [
+    {
+      "available_at_utc": "2026-01-01T10:01:00Z",
+      "id": "o1",
+      "instrument_id": "binance:spot:BTCUSDT",
+      "method": "provider-reported",
+      "metric": "spot.quote.mid",
+      "observed_at_utc": "2026-01-01T10:00:00Z",
+      "retrieved_at_utc": "2026-01-01T10:01:00Z",
+      "source_uri": "https://data-api.binance.vision/api/v3/ticker/bookTicker",
+      "status": "OBSERVED",
+      "unit": "USDT",
+      "value": "100"
+    },
+    {
+      "available_at_utc": "2026-01-01T10:31:00Z",
+      "id": "o2",
+      "instrument_id": "binance:spot:BTCUSDT",
+      "method": "provider-reported",
+      "metric": "spot.quote.mid",
+      "observed_at_utc": "2026-01-01T10:30:00Z",
+      "retrieved_at_utc": "2026-01-01T10:31:00Z",
+      "source_uri": "https://data-api.binance.vision/api/v3/ticker/bookTicker",
+      "status": "OBSERVED",
+      "unit": "USDT",
+      "value": "110"
+    },
+    {
+      "available_at_utc": "2026-01-01T11:01:00Z",
+      "id": "o3",
+      "instrument_id": "binance:spot:BTCUSDT",
+      "method": "provider-reported",
+      "metric": "spot.quote.mid",
+      "observed_at_utc": "2026-01-01T11:00:00Z",
+      "retrieved_at_utc": "2026-01-01T11:01:00Z",
+      "source_uri": "https://api.example.org/alt",
+      "status": "OBSERVED",
+      "unit": "USDT",
+      "value": "121"
+    }
+  ],
+  "run_id": "B12",
+  "schema": "research-run-input.v1",
+  "signals": [
+    {
+      "as_of_utc": "2026-01-01T11:00:00Z",
+      "horizon": "1d",
+      "id": "s1",
+      "instrument_id": "binance:spot:BTCUSDT",
+      "interpretation": "fixture",
+      "method_version": "v1",
+      "model_id": "m1",
+      "observation_ids": [
+        "o1"
+      ],
+      "status": "CALCULATED",
+      "value": "0.5"
+    }
+  ]
+}

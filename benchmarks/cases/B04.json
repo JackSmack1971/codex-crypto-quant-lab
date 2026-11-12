@@ -1,0 +1,73 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B04",
+  "version": "1",
+  "title": "Future-dated evidence",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B04/run.json",
+      "dest": "inputs/B04/run.json",
+      "sha256": "29f9bbb1bfd4065699fadb80b4294c56a96a9652fbabf728c4b8041948271cf3"
+    },
+    {
+      "source": "benchmarks/fixtures/B04/methodology_reviewer.json",
+      "dest": "inputs/B04/methodology_reviewer.json",
+      "sha256": "52c6030704215cecb74bbedcdff58b5ab6a57fee8f7d377428d308a8bd7d61c9"
+    },
+    {
+      "source": "benchmarks/fixtures/B04/source_verifier.json",
+      "dest": "inputs/B04/source_verifier.json",
+      "sha256": "6f70c38779161f91bca64117bc0332794e482fea9b2e27ac216595dff97c66dc"
+    },
+    {
+      "source": "benchmarks/fixtures/B04/spec.json",
+      "dest": "inputs/B04/spec.json",
+      "sha256": "37246a81fc99ef00ac18468fe7e165acc2a275212e1aebebd7b3ebbb68cfb7d7"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B04/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "INSUFFICIENT_EVIDENCE",
+      "completion_state": "COMPLETE"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "FUTURE_DATED"
+      ],
+      "codes_absent": [
+        "VERIFICATION_FAILED",
+        "OPERATION_ERROR"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o9"
+      ]
+    },
+    "missing_data": {
+      "unavailable_claims": [
+        "U:binance:spot:BTCUSDT|spot.quote.mid"
+      ],
+      "no_claims": [],
+      "grade": "INSUFFICIENT_EVIDENCE / NO_TRADE"
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

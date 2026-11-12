@@ -1,0 +1,69 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "case_id": "B28",
+  "expected": {
+    "diagnostics": {
+      "codes_absent": [
+        "COMPLETION_REQUIREMENT_UNMET"
+      ],
+      "codes_present": [
+        "CHART_ORDER_INVALID"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o1b"
+      ]
+    },
+    "process": {
+      "job_state": "FAILED",
+      "stage": "RENDERING"
+    }
+  },
+  "fixtures": [
+    {
+      "dest": "inputs/B28/run.json",
+      "sha256": "8bfa5dbf9580bd06fcb6e1d8bace99ccb469e67762f9135b5e373eab81ec942c",
+      "source": "benchmarks/fixtures/B28/run.json"
+    },
+    {
+      "dest": "inputs/B28/methodology_reviewer.json",
+      "sha256": "52c6030704215cecb74bbedcdff58b5ab6a57fee8f7d377428d308a8bd7d61c9",
+      "source": "benchmarks/fixtures/B28/methodology_reviewer.json"
+    },
+    {
+      "dest": "inputs/B28/source_verifier.json",
+      "sha256": "6f70c38779161f91bca64117bc0332794e482fea9b2e27ac216595dff97c66dc",
+      "source": "benchmarks/fixtures/B28/source_verifier.json"
+    },
+    {
+      "dest": "inputs/B28/report_input.json",
+      "sha256": "32bbc354a8a632d2aa2e2ac4d518d3a46dee2a90cd0edb3abb024870c69f84f6",
+      "source": "benchmarks/fixtures/B28/report_input.json"
+    },
+    {
+      "dest": "inputs/B28/spec.json",
+      "sha256": "b303950d82aee9514265de486314bac8c45ea82a74bdb3f3c2e6484159ab1379",
+      "source": "benchmarks/fixtures/B28/spec.json"
+    }
+  ],
+  "harness": "mission",
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ],
+  "scenario": {
+    "spec": "inputs/B28/spec.json"
+  },
+  "schema": "research-benchmark-case.v1",
+  "title": "Equivalent timestamps are not plotted as sequential chart samples",
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "version": "1"
+}

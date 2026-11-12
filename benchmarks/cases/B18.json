@@ -1,0 +1,52 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B18",
+  "version": "1",
+  "title": "Historical thesis comparison with changed source coverage",
+  "harness": "history",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B18/rev1.json",
+      "dest": "inputs/B18/rev1.json",
+      "sha256": "ef97bad9c30dacfb310cb0e66e1cb32f6e69a96d4db0b35f06460db4996b5d1f"
+    },
+    {
+      "source": "benchmarks/fixtures/B18/rev2.json",
+      "dest": "inputs/B18/rev2.json",
+      "sha256": "fcdea2ede09c8b38817b563f64a59be947b40aa2d096ca404e2e0933c2ab12a1"
+    }
+  ],
+  "scenario": {
+    "revisions": [
+      "inputs/B18/rev1.json",
+      "inputs/B18/rev2.json"
+    ]
+  },
+  "expected": {
+    "history": {
+      "validity": "NOT_REASSESSED",
+      "coverage_assessment": "INSUFFICIENT_EVIDENCE",
+      "recorded_in_new_revision_only": [
+        "ev-c"
+      ],
+      "no_longer_cited": [
+        "ev-a"
+      ],
+      "old_research_as_of_utc": "2026-01-02T00:00:00Z",
+      "new_research_as_of_utc": "2026-01-06T00:00:00Z"
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state",
+    "current validity of a historically SUPPORTED thesis"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

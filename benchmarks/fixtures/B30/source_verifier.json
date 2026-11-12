@@ -1,0 +1,9 @@
+{
+  "evidence": [
+    "o2"
+  ],
+  "produced_by": "benchmark-fixture",
+  "reviewer": "source_verifier",
+  "schema": "reviewer-handoff.v1",
+  "state": "PASS"
+}

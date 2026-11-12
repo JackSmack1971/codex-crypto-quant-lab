@@ -279,8 +279,10 @@ class MissionCompletionTests(unittest.TestCase):
         script = Path(__file__).resolve().parents[1] / 'scripts' / 'verify_mission.py'
         fixture = Path(__file__).resolve().parent / 'fixtures' / 'synthetic-mission-bundle'
         valid = subprocess.run([sys.executable, str(script), str(fixture)], capture_output=True, text=True)
-        self.assertEqual(valid.returncode, 0, valid.stdout + valid.stderr)
-        self.assertEqual(json.loads(valid.stdout)['status'], 'COMPLETE')
+        self.assertEqual(valid.returncode, 2, valid.stdout + valid.stderr)        # integrity passed; evidence checks not performed: not a success
+        self.assertEqual((json.loads(valid.stdout)['status'], json.loads(valid.stdout)['verification_status']), ('COMPLETE', 'PARTIALLY_VERIFIED'))
+        allowed = subprocess.run([sys.executable, str(script), str(fixture), '--allow-partial'], capture_output=True, text=True)
+        self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
         shutil.copytree(fixture, self.root, dirs_exist_ok=True)
         def run():
             return subprocess.run([sys.executable, str(script), str(self.root)], capture_output=True, text=True)

@@ -1,0 +1,129 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "charts": [
+    {
+      "chart_id": "mid-history",
+      "chart_type": "metric_history",
+      "min_samples": 3,
+      "series": [
+        {
+          "label": "BTCUSDT mid",
+          "observation_ids": [
+            "o1",
+            "o2",
+            "o3"
+          ]
+        }
+      ],
+      "title": "Recorded mid history"
+    }
+  ],
+  "derived_claims": [
+    {
+      "claim_id": "chg",
+      "expected_value": "10",
+      "input_evidence_ids": [
+        "o1",
+        "o2"
+      ],
+      "transform": "difference"
+    },
+    {
+      "claim_id": "pct",
+      "input_evidence_ids": [
+        "o1",
+        "o3"
+      ],
+      "transform": "pct_change"
+    }
+  ],
+  "executive_thesis": {
+    "claim_refs": [
+      "R:o1",
+      "R:o2",
+      "D:chg"
+    ],
+    "text": "The first recorded mid is 100 and a later recorded mid is 110, a difference of 10; this is descriptive only."
+  },
+  "interpretations": [
+    {
+      "assumptions": [
+        "The venue quote stays representative of the instrument."
+      ],
+      "claim_refs": [
+        "R:o1",
+        "R:o2"
+      ],
+      "falsifiers": [
+        "A later eligible mid below the first recorded mid would contradict the drift."
+      ],
+      "id": "sc-base",
+      "stance": "base",
+      "text": "The samples are consistent with a stable upward drift; this is not a forecast."
+    },
+    {
+      "assumptions": [
+        "The recorded rise reflects persistent demand."
+      ],
+      "claim_refs": [
+        "D:chg"
+      ],
+      "falsifiers": [
+        "The next eligible mid is lower than the latest one."
+      ],
+      "id": "sc-bull",
+      "stance": "bull",
+      "text": "A continuation of the recorded rise would extend the move."
+    },
+    {
+      "assumptions": [
+        "The rise may be a transient quote artefact."
+      ],
+      "claim_refs": [
+        "R:o1"
+      ],
+      "falsifiers": [
+        "The mid stays above the first recorded value."
+      ],
+      "id": "sc-bear",
+      "stance": "bear",
+      "text": "A reversal below the first recorded mid would invalidate the rise."
+    }
+  ],
+  "key_findings": [
+    {
+      "claim_refs": [
+        "R:o1"
+      ],
+      "id": "f1",
+      "text": "The earliest eligible mid is 100."
+    },
+    {
+      "claim_refs": [
+        "R:o2"
+      ],
+      "id": "f2",
+      "text": "A later eligible mid is 110."
+    },
+    {
+      "claim_refs": [
+        "R:o1",
+        "R:o3",
+        "D:pct"
+      ],
+      "id": "f3",
+      "text": "The third eligible mid is 21 percent above the first."
+    }
+  ],
+  "mission_id": "B01",
+  "risks": [
+    {
+      "claim_refs": [
+        "R:o1"
+      ],
+      "id": "r1",
+      "text": "Single-venue quotes may not reflect executable liquidity."
+    }
+  ],
+  "schema": "research-intelligence-report.v1"
+}

@@ -9,19 +9,32 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
+from . import mission_integrity as integrity
+from .core import ContractError
+
 ARTIFACTS = (
     'mission_baseline.json', 'provider_attempts.json', 'evidence.json',
     'metrics.json', 'hypothesis_assessment.json', 'evaluation_result.json',
     'thesis_revision.json', 'committee_verification.json', 'report.md',
     'report.html',
 )
+SCHEMAS = {'research-mission.v1', 'research-mission.v2'}  # v2 = strict: archive-resolved evidence, metric lineage
 RESEARCH_STATES = {'NOT_EVALUABLE', 'INSUFFICIENT_EVIDENCE', 'EVALUABLE', 'VALIDATED'}
 COMPLETION_STATES = {'COMPLETE', 'INCOMPLETE', 'BLOCKED'}
 REQUIRED_REVIEWS = {'source_verifier', 'methodology_reviewer'}
 
 
-def _diagnostic(code: str, message: str, artifact: str | None = None) -> dict:
-    result = {'code': code, 'message': message}
+def _classify(code: str) -> str:
+    """Diagnostic state for legacy codes: UNKNOWN / INCOMPLETE / INVALID / UNSUPPORTED."""
+    if 'UNSUPPORTED' in code:
+        return 'UNSUPPORTED'
+    if any(word in code for word in ('MISSING', 'UNRECORDED', 'EMPTY', 'REMAINING_WORK', 'HAS_UNSUCCESSFUL', 'NOT_PASSED')):
+        return 'INCOMPLETE'
+    return 'INVALID'
+
+
+def _diagnostic(code: str, message: str, artifact: str | None = None, state: str | None = None) -> dict:
+    result = {'code': code, 'message': message, 'state': state or _classify(code)}
     if artifact is not None:
         result['artifact'] = artifact
     return result
@@ -69,10 +82,24 @@ def _valid_evidence_references(value: object) -> bool:
         for item in value)
 
 
-def verify(root: Path) -> dict:
-    """Validate a research-mission.v1 bundle and return stable machine diagnostics."""
+def verify(root: Path, archive=None) -> dict:
+    """See :func:`_verify`. An archive opened here from a path is closed on every exit path; an
+    archive object supplied by the caller is never closed (the caller keeps ownership)."""
+    with integrity.archive_session(archive) as (opened, open_error):
+        return _verify(root, opened, open_error)
+
+
+def _verify(root: Path, archive, open_error) -> dict:
+    """Validate a research-mission bundle and return stable machine diagnostics.
+
+    ``archive`` (an EvidenceArchive or an existing SQLite path) enables resolution of evidence
+    ids and recomputation of metrics. Without it those layers are reported UNKNOWN, and
+    research-mission.v2 bundles and VALIDATED claims fail closed."""
     root = Path(root)
     diagnostics: list[dict] = []
+    layers: dict = {}
+    if open_error is not None:
+        diagnostics.append(_diagnostic('EVIDENCE_ARCHIVE_UNAVAILABLE', str(open_error), 'evidence.json', 'INVALID'))
     mission_path = root / 'mission.json'
     try:
         mission = json.loads(mission_path.read_text(encoding='utf-8'))
@@ -86,7 +113,8 @@ def verify(root: Path) -> dict:
                        'missing_artifacts', 'blockers', 'remaining_work'}
     for field in sorted(required_fields - mission.keys()):
         diagnostics.append(_diagnostic('MISSION_FIELD_MISSING', f'missing required field: {field}', 'mission.json'))
-    if mission.get('schema') != 'research-mission.v1':
+    strict = mission.get('schema') == 'research-mission.v2'
+    if mission.get('schema') not in SCHEMAS:
         diagnostics.append(_diagnostic('MISSION_SCHEMA_INVALID', 'unsupported or missing schema', 'mission.json'))
     declared = mission.get('completion_state')
     if not isinstance(declared, str) or declared not in COMPLETION_STATES:
@@ -167,6 +195,21 @@ def verify(root: Path) -> dict:
     elif not _valid_evidence_references(evidence['references']):
         diagnostics.append(_diagnostic('EVIDENCE_REFERENCE_INVALID', 'each evidence reference must identify a non-empty id', 'evidence.json'))
 
+    as_of = baseline.get('as_of_utc') if isinstance(baseline, dict) else None
+    evidence_refs = evidence.get('references') if isinstance(evidence, dict) and _valid_evidence_references(evidence.get('references')) else []
+    evidence_ids = {integrity.reference_id(item) for item in evidence_refs}
+    if evidence_refs:
+        found, source_state, resolved = integrity.resolve_evidence(evidence_refs, archive, as_of, strict=strict)
+        diagnostics.extend(found)
+    else:
+        source_state, resolved = 'INCOMPLETE', {}
+    if 'metrics.json' in loaded:
+        found, quant_state = integrity.verify_metrics(loaded['metrics.json'], evidence_ids, resolved, strict=strict,
+                                                      archive_present=archive is not None and source_state != 'INVALID')
+        diagnostics.extend(found)
+    else:
+        quant_state = 'INCOMPLETE'
+
     attempts_obj = loaded.get('provider_attempts.json')
     attempts = attempts_obj.get('attempts') if isinstance(attempts_obj, dict) else None
     if not isinstance(attempts, list):
@@ -224,6 +267,8 @@ def verify(root: Path) -> dict:
                 diagnostics.append(_diagnostic('COMMITTEE_REVIEW_NOT_PASSED', f'{reviewer} review is {reviews[reviewer]["state"]}', 'committee_verification.json'))
             elif not _valid_evidence_references(reviews[reviewer].get('evidence')):
                 diagnostics.append(_diagnostic('COMMITTEE_REVIEW_EVIDENCE_MISSING', f'{reviewer} PASS requires attributable evidence references', 'committee_verification.json'))
+            elif strict and {integrity.reference_id(i) for i in reviews[reviewer]['evidence']} - evidence_ids:
+                diagnostics.append(_diagnostic('REVIEW_EVIDENCE_UNRESOLVED', f'{reviewer} cites evidence not listed in evidence.json', 'committee_verification.json', 'INVALID'))
 
     blockers = mission.get('blockers', [])
     if not isinstance(blockers, list):
@@ -262,12 +307,24 @@ def verify(root: Path) -> dict:
             diagnostics.append(_diagnostic('COMPLETE_HAS_UNSUCCESSFUL_PROVIDER_ATTEMPT', 'COMPLETE requires all attempted mandatory provider operations to succeed', 'provider_attempts.json'))
         if isinstance(evaluation, dict) and evaluation.get('state') == 'FAIL':
             diagnostics.append(_diagnostic('COMPLETE_HAS_FAILED_EVALUATION', 'COMPLETE cannot contain a failed evaluation', 'evaluation_result.json'))
+    validated_state = 'NOT_CLAIMED'
     if research_state == 'VALIDATED':
         validation = evaluation.get('validation') if isinstance(evaluation, dict) else None
         cross_validation = (validation.get('walk_forward'), validation.get('cpcv')) if isinstance(validation, dict) else (None, None)
         supported = all(_valid_cross_validation(result) for result in cross_validation)
+        before = len(diagnostics)
         if not (isinstance(evaluation, dict) and evaluation.get('state') == 'PASS' and supported):
             diagnostics.append(_diagnostic('VALIDATED_UNSUPPORTED', 'VALIDATED requires a passing evaluation with non-empty, disjoint walk-forward and CPCV folds using research-crossvalidation.v1', 'evaluation_result.json'))
+        else:
+            for kind, result in zip(('walk_forward', 'cpcv'), cross_validation):
+                windows = result.get('label_windows', validation.get('label_windows'))
+                for code, message, state in integrity.chronology_problems(result, windows, walk_forward=kind == 'walk_forward'):
+                    diagnostics.append(_diagnostic(code, f'{kind}: {message}', 'evaluation_result.json', state))
+        if source_state != 'ARCHIVE_RESOLVED':
+            diagnostics.append(_diagnostic('VALIDATED_EVIDENCE_UNVERIFIED', f'VALIDATED requires every evidence reference to resolve in an archive (source provenance is {source_state})', 'evidence.json', 'UNKNOWN' if source_state == 'UNKNOWN' else 'INVALID'))
+        if quant_state != 'VERIFIED':
+            diagnostics.append(_diagnostic('VALIDATED_QUANTITATIVE_UNVERIFIED', f'VALIDATED requires metrics recomputed from archived inputs (quantitative verification is {quant_state})', 'metrics.json', quant_state if quant_state in ('UNKNOWN', 'INCOMPLETE', 'UNSUPPORTED', 'INVALID') else 'UNSUPPORTED'))
+        validated_state = 'UNSUPPORTED' if len(diagnostics) > before else 'CLAIM_GATES_PASSED'
     blocked_expected_diagnostics = {'ARTIFACT_REFERENCE_MISSING', 'ARTIFACT_MISSING', 'EVIDENCE_REFERENCES_INVALID',
                                     'PROVIDER_ATTEMPTS_INVALID', 'HYPOTHESIS_STATE_INVALID',
                                     'EVALUATION_STATE_INVALID', 'THESIS_RECORD_INVALID',
@@ -279,10 +336,28 @@ def verify(root: Path) -> dict:
         status = 'INCOMPLETE'
     else:
         status = declared
-    return _result(status, diagnostics)
+    artifact_codes = [d for d in diagnostics if d['code'].startswith('ARTIFACT_') or d['code'] in ('BASELINE_INVALID', 'MISSION_FIELD_MISSING')]
+    review_bad = [d for d in diagnostics if d['code'].startswith(('COMMITTEE_', 'REVIEW_'))]
+    layers = {
+        'artifact_integrity': {'state': ('INVALID' if any(d['state'] == 'INVALID' for d in artifact_codes) else
+                                         'INCOMPLETE' if artifact_codes else 'VERIFIED'),
+                               'scope': 'recorded SHA-256 digests only; not authenticity'},
+        'source_provenance': {'state': source_state,
+                              'scope': 'evidence ids resolved against a local archive; not proof the provider was truthful'},
+        'review_provenance': {'state': ('INVALID' if any(d['state'] == 'INVALID' for d in review_bad) else
+                                        'INCOMPLETE' if review_bad else 'ASSERTED_UNAUTHENTICATED'),
+                              'authenticated': False,
+                              'scope': 'a PASS record exists; reviewer identity and substance are not attested'},
+        'quantitative_verification': {'state': quant_state,
+                                      'scope': 'Decimal recomputation from archived inputs through a declared transform'},
+        'scientific_validity': {'state': validated_state, 'established': False,
+                                'scope': 'CLAIM_GATES_PASSED means preconditions held; it is not evidence of predictive edge'},
+    }
+    return _result(status, diagnostics, layers, schema=mission.get('schema'))
 
 
-def _result(status: str, diagnostics: list[dict]) -> dict:
+def _result(status: str, diagnostics: list[dict], layers: dict | None = None, schema: object = None) -> dict:
     ordered = sorted(diagnostics, key=lambda d: (d['code'], d.get('artifact', ''), d['message']))
-    return {'schema': 'research-mission-verification.v1', 'status': status,
+    return {'schema': 'research-mission-verification.v1', 'status': status, 'mission_schema': schema,
+            'authenticity': 'NOT_AUTHENTICATED', 'layers': layers or {},
             'errors': [item['message'] for item in ordered], 'diagnostics': ordered}
