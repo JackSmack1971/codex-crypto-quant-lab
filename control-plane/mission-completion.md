@@ -28,3 +28,26 @@ Every diagnostic now carries a `state`: `UNKNOWN` (cannot be determined from wha
 **`research-mission.v2`** (opt-in; `research-mission.v1` remains accepted and unchanged for non-`VALIDATED` bundles) fails closed: an archive is required (`EVIDENCE_UNRESOLVED_NO_ARCHIVE`), baseline `as_of_utc` is required, every metric needs lineage (`METRIC_LINEAGE_MISSING`), and committee review evidence must be ids listed in `evidence.json` (`REVIEW_EVIDENCE_UNRESOLVED`). Passing an archive to a v1 bundle also resolves and rejects unknown, tampered, contradicted or future-dated evidence.
 
 Limits: the archive and bundle are both local and can be rewritten consistently by whoever controls them; the verifier is not run against wall-clock time (future relative to the mission baseline only); it does not establish that a provider told the truth, that a model is sound, or that any edge exists.
+
+
+## P1 coordinator mapping
+
+`MissionCoordinator` assembles a `research-mission.v2` bundle in `<output_dir>/stages/FINALIZING/<op-key>/` and runs the same `verify()` described above, with the mission's own evidence archive, before it records `final_verification.json`. The bundle's `completion_state` is `COMPLETE` only when every provider attempt `SUCCEEDED`, both reviews are `PASS`, no evaluation `FAIL`ed and at least one eligible evidence reference exists; otherwise it is `INCOMPLETE` with the reasons in `remaining_work`. `metrics.json` carries no derived metrics in P1 (`NOT_APPLICABLE`), `thesis_revision.json` records a non-revision reason, and the coordinator never produces `research_state: VALIDATED`.
+
+| Code | Meaning |
+|---|---|
+| `INVALID_MISSION_SPEC` (+ `SPEC_*` diagnostics) | Specification failed validation; nothing was created |
+| `MISSION_ALREADY_EXISTS` | Same mission id, different specification; use a new id (identical re-creation is idempotent) |
+| `OPERATION_IDENTITY_CONFLICT` | A stage was already bound to a different input digest |
+| `STAGE_PRECONDITION_FAILED` | A pinned input differs from its digest, is malformed, or an operation is not permitted |
+| `REQUIRED_EVIDENCE_UNAVAILABLE` | A declared input/handoff is absent (stage `BLOCKED`) or the finished bundle is honestly incomplete |
+| `STAGE_OUTPUT_MISSING` / `STAGE_OUTPUT_DIGEST_MISMATCH` | A committed or on-disk artifact is absent or does not match its recorded/expected digest |
+| `RECOVERY_RECONCILIATION_REQUIRED` | A stage is claimed or interrupted; run `reconcile_mission` (also returned with contradictory artifacts) |
+| `UNSAFE_REPLAY_BLOCKED` | Recovery refused to replay over contradictory or unverifiable artifacts; evidence is retained |
+| `STAGE_FENCED` | This executor lost its claim; its result was discarded |
+| `MISSION_CANCELLED` | The mission was cancelled; an in-flight executor's commit is refused |
+| `VERIFICATION_FAILED` | Archived evidence or the final bundle failed integrity verification |
+| `COMPLETION_REQUIREMENT_UNMET` | Verified, but the research state is not an accepted one or a declared evaluation failed |
+| `STAGE_POSTCONDITION_FAILED` / `OPERATION_ERROR` | An operation returned a wrong artifact set / failed unexpectedly (type name only is recorded) |
+
+Crash windows covered by tests: before admission, after admission, after artifact write before state commit, after state commit before downstream work, during report generation, during final verification, and after the final stage commit before job completion. `UNSAFE_REPLAY_BLOCKED` accompanies `RECOVERY_RECONCILIATION_REQUIRED` whenever recovery finds contradictory or unverifiable artifacts: the operation is deterministic and local, but replaying it over contradictory bytes would destroy evidence, so recovery stops and the job is `BLOCKED` for manual resolution. An operation with an external side effect would have to return the same code instead of being replayed; none exists in P1.

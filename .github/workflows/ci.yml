@@ -30,7 +30,7 @@ jobs:
       - name: Syntax and import checks
         run: |
           python -m compileall -q quant_free_mcp research_lab scripts src tests
-          python -c "import quant_free_mcp.core, quant_free_mcp.acquisition, quant_free_mcp.adapters, quant_free_mcp.math, research_lab.completion, research_lab.mission_integrity, research_lab.provider_policy, research_lab.archive"
+          python -c "import quant_free_mcp.core, quant_free_mcp.acquisition, quant_free_mcp.adapters, quant_free_mcp.math, research_lab.completion, research_lab.mission_integrity, research_lab.provider_policy, research_lab.archive, research_lab.mission_spec, research_lab.mission_coordinator, research_lab.experiment_registry"
       - name: Dependency declaration check
         run: python scripts/check_dependencies.py
       - name: Core, reporting, research, mission-integrity and provider fault-injection tests
@@ -38,7 +38,8 @@ jobs:
           set -e
           for t in test_core test_reporting test_control_plane_validator test_mission_completion test_mission_integrity \
                    test_acquisition test_research_lab test_research_expansion test_research_workflows \
-                   test_research_v24 test_research_explorer_v24 test_p0_regressions; do
+                   test_research_v24 test_research_explorer_v24 test_p0_regressions \
+                   test_mission_coordinator test_mission_recovery test_experiment_registry test_mission_e2e; do
             python -m unittest "tests.$t" -v
           done
 
