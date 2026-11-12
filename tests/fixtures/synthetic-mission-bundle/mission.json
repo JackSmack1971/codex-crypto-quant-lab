@@ -1,0 +1,50 @@
+{
+  "artifacts": {
+    "committee_verification.json": {
+      "path": "committee_verification.json",
+      "sha256": "e8bf3593f6104dab8248b554b4d4e1f4430baea8b90c68e961344edc59488536"
+    },
+    "evaluation_result.json": {
+      "path": "evaluation_result.json",
+      "sha256": "0abc075ab03993d4ca4df564fd8a5618c5455b057c05b43eb5a1fb4af475c492"
+    },
+    "evidence.json": {
+      "path": "evidence.json",
+      "sha256": "ff768e5370cf611de09ba0694343627979541d1b071317ed73b96afec8f59a90"
+    },
+    "hypothesis_assessment.json": {
+      "path": "hypothesis_assessment.json",
+      "sha256": "9978fea9447e5d88ddc6783fb4b99ddc45f4068eef5ff648f38defd7f335e69c"
+    },
+    "metrics.json": {
+      "path": "metrics.json",
+      "sha256": "2a8103d59a846b279e58c6473a187df89a422170b870e318ac5317e0330f8f39"
+    },
+    "mission_baseline.json": {
+      "path": "mission_baseline.json",
+      "sha256": "9ae65b6c98a1d5620807aac6aca41d368b3b3c3abc779dddf07cc0c993826ad8"
+    },
+    "provider_attempts.json": {
+      "path": "provider_attempts.json",
+      "sha256": "f46e00fb9d6c957daa15c14608eaae2a7c681105a2b74663f90bcae02e1ed989"
+    },
+    "report.html": {
+      "path": "report.html",
+      "sha256": "1b9af7dd11cacbf312f9868a36a3ae87b1b22bf9d3436b4871162fbec2b175c2"
+    },
+    "report.md": {
+      "path": "report.md",
+      "sha256": "d3d389f06d161dd9236b4d92ae2990d57a1d4365dfc61095178133dc2a2b03ad"
+    },
+    "thesis_revision.json": {
+      "path": "thesis_revision.json",
+      "sha256": "237354d5b30cc8da5a3624e1641ed9d6dc0b336b246d9f2e43391fea40b25adc"
+    }
+  },
+  "blockers": [],
+  "completion_state": "COMPLETE",
+  "missing_artifacts": [],
+  "remaining_work": [],
+  "research_state": "NOT_EVALUABLE",
+  "schema": "research-mission.v1"
+}

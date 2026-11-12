@@ -1,0 +1,8 @@
+{
+  "as_of_utc": "2026-01-01T00:00:00Z",
+  "fixture": "synthetic only; no market evidence",
+  "required_provider_operations": [
+    "synthetic.fixture.read"
+  ],
+  "run_id": "synthetic-mission-fixture"
+}

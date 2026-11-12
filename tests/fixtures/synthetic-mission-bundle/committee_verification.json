@@ -1,0 +1,16 @@
+{
+  "reviews": {
+    "methodology_reviewer": {
+      "evidence": [
+        "synthetic:fixture:review-2"
+      ],
+      "state": "PASS"
+    },
+    "source_verifier": {
+      "evidence": [
+        "synthetic:fixture:review-1"
+      ],
+      "state": "PASS"
+    }
+  }
+}

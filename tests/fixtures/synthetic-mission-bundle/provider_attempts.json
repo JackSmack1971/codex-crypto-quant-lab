@@ -1,0 +1,9 @@
+{
+  "attempts": [
+    {
+      "operation_id": "synthetic.fixture.read",
+      "provider": "synthetic-fixture",
+      "status": "SUCCEEDED"
+    }
+  ]
+}
