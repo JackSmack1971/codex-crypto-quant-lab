@@ -13,11 +13,14 @@ controls them. A separately trusted anchor would be required for that.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import asdict
 from decimal import Decimal, InvalidOperation, DivisionByZero
 from pathlib import Path
+import sqlite3
 from typing import Any
 
+from .archive import ArchiveDatabaseError, ArchiveIntegrityError, EvidenceMissing
 from .core import ContractError, _utc, digest
 
 # Diagnostic/layer states. They are deliberately distinct:
@@ -34,18 +37,47 @@ def _d(code, message, artifact, state):
     return {'code': code, 'message': message, 'artifact': artifact, 'state': state}
 
 
-def open_archive(archive: Any):
-    """Return an object with ``get(id)`` or None. A path is opened only if it already exists
-    (never created as a side effect of verification)."""
+def _open_owned(archive: Any):
+    """Return (archive, owned). ``owned`` is the object this module created and must close; a
+    caller-supplied archive object is never owned."""
     if archive is None:
-        return None
+        return None, None
     if hasattr(archive, 'get'):
-        return archive
+        return archive, None
     path = Path(archive)
     if not path.is_file():
         raise ContractError('evidence archive not found')
     from .archive import EvidenceArchive
-    return EvidenceArchive(path)
+    try:
+        opened = EvidenceArchive(path)
+    except sqlite3.Error as exc:
+        raise ArchiveDatabaseError(f'archive database error: {type(exc).__name__}') from exc
+    return opened, opened
+
+
+def open_archive(archive: Any):
+    """Return an object with ``get(id)`` or None. A path is opened only if it already exists
+    (never created as a side effect of verification). The caller then owns any returned object
+    opened from a path; prefer :func:`archive_session`, which closes it deterministically."""
+    return _open_owned(archive)[0]
+
+
+@contextmanager
+def archive_session(archive: Any):
+    """Yield ``(archive, open_error)``. An archive opened here from a path is closed on every exit
+    path (success, failure, exception); an archive object supplied by the caller is never closed."""
+    owned = None
+    try:
+        opened, owned = _open_owned(archive)
+        error = None
+    except ContractError as exc:
+        opened, error = None, exc
+    try:
+        yield opened, error
+    finally:
+        close = getattr(owned, 'close', None)
+        if callable(close):
+            close()
 
 
 def reference_id(item: Any) -> str | None:
@@ -61,10 +93,13 @@ def resolve_evidence(references: list, archive, as_of_utc: str | None, *, strict
     out: list[dict] = []
     ids = [reference_id(r) for r in references]
     seen: set[str] = set()
-    for rid in ids:
-        if rid in seen:
+    for index, rid in enumerate(ids):
+        if rid is None:  # validate before duplicate tracking: malformed ids never enter ``seen``
+            out.append(_d('EVIDENCE_REFERENCE_MALFORMED', f'evidence reference {index} has no usable string id', 'evidence.json', INVALID))
+        elif rid in seen:
             out.append(_d('EVIDENCE_REFERENCE_DUPLICATE', f'duplicate evidence reference: {rid}', 'evidence.json', INVALID))
-        seen.add(rid)
+        else:
+            seen.add(rid)
     if archive is None:
         if strict:
             out.append(_d('EVIDENCE_UNRESOLVED_NO_ARCHIVE',
@@ -84,12 +119,16 @@ def resolve_evidence(references: list, archive, as_of_utc: str | None, *, strict
             continue
         try:
             obs = archive.get(rid)
-        except ContractError as exc:
-            missing = 'missing' in str(exc)
-            out.append(_d('EVIDENCE_NOT_IN_ARCHIVE' if missing else 'EVIDENCE_ARCHIVE_INTEGRITY',
-                          f'{rid}: {exc}', 'evidence.json', INVALID))
+        except EvidenceMissing:  # classification is by exception type, never by message text
+            out.append(_d('EVIDENCE_NOT_IN_ARCHIVE', f'{rid}: not present in the archive', 'evidence.json', INVALID))
             continue
-        except Exception as exc:  # noqa: BLE001 - corrupt archive row must fail closed, not crash
+        except ArchiveIntegrityError as exc:
+            out.append(_d('EVIDENCE_ARCHIVE_INTEGRITY', f'{rid}: {exc}', 'evidence.json', INVALID))
+            continue
+        except (ArchiveDatabaseError, sqlite3.Error) as exc:
+            out.append(_d('EVIDENCE_ARCHIVE_DATABASE_ERROR', f'{rid}: {type(exc).__name__}', 'evidence.json', INVALID))
+            continue
+        except Exception as exc:  # noqa: BLE001 - unclassified archive failure must fail closed, not crash
             out.append(_d('EVIDENCE_ARCHIVE_INTEGRITY', f'{rid}: {type(exc).__name__}', 'evidence.json', INVALID))
             continue
         if obs.status != 'OBSERVED':
@@ -127,6 +166,11 @@ def _num(text: Any) -> Decimal:
     if not value.is_finite():
         raise ValueError
     return value
+
+
+def _obs_value(value: Any) -> Decimal:
+    """Archived observation value as a finite Decimal; NaN/Infinity/non-numeric are rejected."""
+    return _num(value)
 
 
 def verify_metrics(metrics_obj: Any, evidence_ids: set[str], resolved: dict, *, strict: bool, archive_present: bool):
@@ -175,7 +219,7 @@ def verify_metrics(metrics_obj: Any, evidence_ids: set[str], resolved: dict, *, 
             tolerance = _num(transform.get('tolerance', '0'))
             if tolerance < 0:
                 raise ValueError
-        except (ValueError, InvalidOperation):
+        except (ArithmeticError, ValueError, TypeError):
             out.append(_d('METRIC_VALUE_INVALID', f'{label} value/tolerance must be finite decimals', 'metrics.json', INVALID))
             continue
         if not isinstance(metric.get('unit'), str) or not metric['unit'].strip():
@@ -198,7 +242,7 @@ def verify_metrics(metrics_obj: Any, evidence_ids: set[str], resolved: dict, *, 
                 out.append(_d('METRIC_UNIT_MISMATCH', f'{label}: unit {metric["unit"]!r} != input unit {observations[0].unit!r}', 'metrics.json', INVALID))
                 continue
         try:
-            values = [Decimal(o.value) for o in observations]
+            values = [_obs_value(o.value) for o in observations]
             if name == 'identity':
                 expected = values[0]
             elif name == 'sum':
@@ -209,10 +253,13 @@ def verify_metrics(metrics_obj: Any, evidence_ids: set[str], resolved: dict, *, 
                 expected = values[0] - values[1]
             else:
                 expected = values[0] / values[1]
-        except (DivisionByZero, InvalidOperation, TypeError):
+            if not expected.is_finite():
+                raise ValueError('non-finite result')
+            mismatch = abs(expected - claimed) > tolerance
+        except (ArithmeticError, ValueError, TypeError):  # DecimalException is an ArithmeticError
             out.append(_d('METRIC_TRANSFORM_UNDEFINED', f'{label}: {name} is undefined for its inputs', 'metrics.json', INVALID))
             continue
-        if abs(expected - claimed) > tolerance:
+        if mismatch:
             out.append(_d('METRIC_VALUE_MISMATCH', f'{label}: claimed {claimed} != recomputed {expected}', 'metrics.json', INVALID))
             continue
         verified += 1
@@ -259,11 +306,15 @@ def chronology_problems(result: dict, windows_raw: Any, *, walk_forward: bool) -
     except ContractError as exc:
         return [('CV_LABEL_WINDOWS_INVALID', str(exc), INVALID)]
     problems = []
-    for number, fold in enumerate(result.get('folds', [])):
-        train, test = fold['train_indices'], fold['test_indices']
-        if max(train + test) >= len(windows):
-            problems.append(('CV_INDEX_OUT_OF_RANGE', f'fold {number} indexes beyond {len(windows)} label windows', INVALID))
+    folds = result.get('folds') if isinstance(result, dict) else None
+    if not isinstance(folds, list) or not folds:
+        return [('CV_FOLDS_MALFORMED', 'folds must be a non-empty list', INVALID)]
+    for number, fold in enumerate(folds):
+        structural = _fold_problem(fold, len(windows))
+        if structural:  # chronology/leakage checks run only on structurally valid folds
+            problems.append((structural[0], f'fold {number}: {structural[1]}', INVALID))
             continue
+        train, test = fold['train_indices'], fold['test_indices']
         first_test_start = min(windows[j][0] for j in test)
         for i in train:
             overlap = any(windows[i][0] <= windows[j][1] and windows[j][0] <= windows[i][1] for j in test)
@@ -274,3 +325,30 @@ def chronology_problems(result: dict, windows_raw: Any, *, walk_forward: bool) -
                 problems.append(('CV_TRAIN_NOT_BEFORE_TEST', f'fold {number}: walk-forward train label {i} does not end before the first test label', INVALID))
                 break
     return problems
+
+
+def _fold_problem(fold: Any, n_windows: int) -> tuple[str, str] | None:
+    """Structural validation of one fold: (code, reason) or None. Never raises. Indices must be real
+    ints (not bool), within [0, n_windows), unique within a list, and disjoint between train and test;
+    negative values are rejected so Python's negative indexing can never select the wrong window."""
+    if not isinstance(fold, dict):
+        return 'CV_FOLD_MALFORMED', 'fold must be an object'
+    lists = {}
+    for key in ('train_indices', 'test_indices'):
+        value = fold.get(key)
+        if not isinstance(value, list) or not value:
+            return 'CV_FOLD_MALFORMED', f'{key} must be a non-empty list'
+        lists[key] = value
+    for key, value in lists.items():
+        for index in value:
+            if isinstance(index, bool) or not isinstance(index, int):
+                return 'CV_INDEX_INVALID', f'{key} contains a non-integer index'
+            if index < 0:
+                return 'CV_INDEX_INVALID', f'{key} contains a negative index'
+            if index >= n_windows:
+                return 'CV_INDEX_OUT_OF_RANGE', f'{key} indexes beyond {n_windows} label windows'
+        if len(set(value)) != len(value):
+            return 'CV_INDEX_DUPLICATE', f'{key} contains duplicate indices'
+    if set(lists['train_indices']) & set(lists['test_indices']):
+        return 'CV_TRAIN_TEST_INDEX_SHARED', 'train and test share an index'
+    return None

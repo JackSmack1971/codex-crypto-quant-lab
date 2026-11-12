@@ -83,6 +83,13 @@ def _valid_evidence_references(value: object) -> bool:
 
 
 def verify(root: Path, archive=None) -> dict:
+    """See :func:`_verify`. An archive opened here from a path is closed on every exit path; an
+    archive object supplied by the caller is never closed (the caller keeps ownership)."""
+    with integrity.archive_session(archive) as (opened, open_error):
+        return _verify(root, opened, open_error)
+
+
+def _verify(root: Path, archive, open_error) -> dict:
     """Validate a research-mission bundle and return stable machine diagnostics.
 
     ``archive`` (an EvidenceArchive or an existing SQLite path) enables resolution of evidence
@@ -91,11 +98,8 @@ def verify(root: Path, archive=None) -> dict:
     root = Path(root)
     diagnostics: list[dict] = []
     layers: dict = {}
-    try:
-        archive = integrity.open_archive(archive)
-    except ContractError as exc:
-        archive = None
-        diagnostics.append(_diagnostic('EVIDENCE_ARCHIVE_UNAVAILABLE', str(exc), 'evidence.json', 'INVALID'))
+    if open_error is not None:
+        diagnostics.append(_diagnostic('EVIDENCE_ARCHIVE_UNAVAILABLE', str(open_error), 'evidence.json', 'INVALID'))
     mission_path = root / 'mission.json'
     try:
         mission = json.loads(mission_path.read_text(encoding='utf-8'))

@@ -198,31 +198,74 @@ class ResponseCache:
             pass
 
 
+class _Ticket:
+    """Admission ticket. ``probe`` is True only for the single HALF_OPEN probe.
+    Each ticket settles exactly once (success, failure or release); later calls are no-ops."""
+    __slots__ = ('probe', 'settled')
+
+    def __init__(self, probe: bool):
+        self.probe, self.settled = probe, False
+
+
 class CircuitBreaker:
+    """Thread-safe breaker. ``allow`` returns a ticket (or None when rejected); the holder must
+    settle it through ``success``/``failure``/``release``. A probe ticket that is never settled
+    would wedge the breaker, so callers settle in a ``finally``."""
+
     def __init__(self, threshold: int, open_seconds: float):
         self.threshold, self.open_seconds = threshold, open_seconds
         self.state, self.failures, self.opened_until = CLOSED, 0, 0.0
         self._probe_in_flight = False
+        self._lock = RLock()
 
-    def allow(self, now: float) -> bool:
-        if self.state == OPEN:
-            if now < self.opened_until:
-                return False
-            self.state, self._probe_in_flight = HALF_OPEN, False
-        if self.state == HALF_OPEN:
-            if self._probe_in_flight:
-                return False  # exactly one probe at a time
-            self._probe_in_flight = True
-        return True
+    def allow(self, now: float) -> '_Ticket | None':
+        with self._lock:
+            if self.state == OPEN:
+                if now < self.opened_until:
+                    return None
+                self.state, self._probe_in_flight = HALF_OPEN, False
+            if self.state == HALF_OPEN:
+                if self._probe_in_flight:
+                    return None  # exactly one probe at a time
+                self._probe_in_flight = True
+                return _Ticket(True)
+            return _Ticket(False)
 
-    def success(self) -> None:
-        self.state, self.failures, self._probe_in_flight = CLOSED, 0, False
+    def release(self, ticket: '_Ticket | None') -> None:
+        """Settle without a health verdict (rejected locally, permanent client error, redirect,
+        cancellation). A probe ticket frees the probe slot so the next caller may probe."""
+        with self._lock:
+            if ticket is None or ticket.settled:
+                return
+            ticket.settled = True
+            if ticket.probe:
+                self._probe_in_flight = False
 
-    def failure(self, now: float, *, cooldown: float = 0.0) -> None:
-        self.failures += 1
-        self._probe_in_flight = False
-        if self.state == HALF_OPEN or self.failures >= self.threshold or cooldown > 0:
-            self.state = OPEN
+    def success(self, ticket: '_Ticket | None') -> None:
+        with self._lock:
+            if ticket is None or ticket.settled:
+                return
+            ticket.settled = True
+            if ticket.probe:
+                self._probe_in_flight = False
+                self.state, self.failures = CLOSED, 0
+            elif self.state == CLOSED:
+                self.failures = 0
+            # a late success from a pre-open request must not close an OPEN/HALF_OPEN breaker
+
+    def failure(self, ticket: '_Ticket | None', now: float, *, cooldown: float = 0.0) -> None:
+        with self._lock:
+            if ticket is None or ticket.settled:
+                return
+            ticket.settled = True
+            self.failures += 1
+            if ticket.probe:
+                self._probe_in_flight = False
+                self.state = OPEN
+            elif self.state == CLOSED and (self.failures >= self.threshold or cooldown > 0):
+                self.state = OPEN
+            else:
+                return  # already OPEN/HALF_OPEN: count it, keep existing window
             self.opened_until = now + max(self.open_seconds, cooldown)
 
 
@@ -308,7 +351,10 @@ class Acquirer:
         self.cache_policies = cache_policies if cache_policies is not None else dict(DEFAULT_CACHE_POLICIES)
         self.jitter = jitter or random.random
         self.headers = {'Accept': 'application/json', 'User-Agent': user_agent}
-        self._lock = RLock()
+        # ``_registry`` only guards creation of per-provider objects. All provider state is guarded
+        # by that provider's own lock; no lock is ever held across transport I/O or a sleep.
+        self._registry = RLock()
+        self._plocks: dict[str, RLock] = {}
         self._breakers: dict[str, CircuitBreaker] = {}
         self._health: dict[str, _Health] = {}
         self._quota: dict[str, list[tuple[float, int]]] = {}
@@ -319,9 +365,20 @@ class Acquirer:
     def _policy(self, provider):
         return self.provider_policies.get(provider) or ProviderPolicy()
 
+    def _plock(self, provider) -> RLock:
+        with self._registry:
+            return self._plocks.setdefault(provider, RLock())
+
     def _breaker(self, provider):
-        p = self._policy(provider)
-        return self._breakers.setdefault(provider, CircuitBreaker(p.breaker_failure_threshold, p.breaker_open_seconds))
+        with self._registry:
+            if provider not in self._breakers:
+                p = self._policy(provider)
+                self._breakers[provider] = CircuitBreaker(p.breaker_failure_threshold, p.breaker_open_seconds)
+            return self._breakers[provider]
+
+    def _hl(self, provider) -> _Health:
+        with self._registry:
+            return self._health.setdefault(provider, _Health())
 
     def _charge_quota(self, provider, weight, now) -> bool:
         p = self._policy(provider)
@@ -347,146 +404,183 @@ class Acquirer:
             require_json: bool = True) -> AcquisitionResult:
         pol, cpol = self._policy(provider), self.cache_policies.get(route, CachePolicy())
         key = self.cache_key(url)
-        with self._lock:
-            health = self._health.setdefault(provider, _Health())
-            now = self.clock.now()
-            entry = self.cache.get(key) if self.cache is not None else None
-            if entry and now < entry['expires_at'] and now >= entry['retrieved_at']:
+        health, plock = self._hl(provider), self._plock(provider)
+        now = self.clock.now()
+        entry = self.cache.get(key) if self.cache is not None else None  # cache has its own lock
+        if entry and now < entry['expires_at'] and now >= entry['retrieved_at']:
+            with plock:
                 health.cache_hits += 1
-                return AcquisitionResult(entry['body'], provider, route, url, entry['retrieved_at'],
-                                         self._cache_meta(FRESH_CACHE, entry, now), 0)
-            try:
-                return self._network(provider, route, url, key, pol, cpol, health, require_json)
-            except AcquisitionError as exc:
-                now = self.clock.now()
-                # Stale fallback is same URL (same metric/venue/params) only, and opt-in.
-                usable = (allow_stale and entry is not None
-                          and entry['retrieved_at'] <= now <= entry['stale_until']
-                          and (exc.code in _STALE_ELIGIBLE or exc.code.startswith('upstream_http_5')))
-                if usable:
+            return AcquisitionResult(entry['body'], provider, route, url, entry['retrieved_at'],
+                                     self._cache_meta(FRESH_CACHE, entry, now), 0)
+        try:
+            return self._network(provider, route, url, key, pol, cpol, health, require_json)
+        except AcquisitionError as exc:
+            now = self.clock.now()
+            # Stale fallback is same URL (same metric/venue/params) only, and opt-in.
+            usable = (allow_stale and entry is not None
+                      and entry['retrieved_at'] <= now <= entry['stale_until']
+                      and (exc.code in _STALE_ELIGIBLE or exc.code.startswith('upstream_http_5')))
+            if usable:
+                with plock:
                     health.stale_served += 1
-                    meta = self._cache_meta(STALE_CACHE, entry, now)
-                    meta['stale_reason'] = exc.code
-                    return AcquisitionResult(entry['body'], provider, route, url, entry['retrieved_at'], meta, exc.attempts)
-                raise
+                meta = self._cache_meta(STALE_CACHE, entry, now)
+                meta['stale_reason'] = exc.code
+                return AcquisitionResult(entry['body'], provider, route, url, entry['retrieved_at'], meta, exc.attempts)
+            raise
 
     def _network(self, provider, route, url, key, pol, cpol, health, require_json) -> AcquisitionResult:
-        breaker = self._breaker(provider)
-        weight = ROUTE_WEIGHTS.get(route, 1)
         attempts = 0
         while attempts < pol.max_attempts:  # bounded: max_attempts is the hard ceiling
-            now = self.clock.now()
-            cooldown = self._cooldown.get(provider, 0.0)
-            if now < cooldown:
-                health.circuit_rejections += 1
-                raise AcquisitionError('rate_limited', retry_after_seconds=cooldown - now, attempts=attempts,
-                                       detail='provider_cooldown_active')
-            if not breaker.allow(now):
-                health.circuit_rejections += 1
-                raise AcquisitionError('circuit_open', retry_after_seconds=max(0.0, breaker.opened_until - now),
-                                       attempts=attempts)
-            if attempts == 0 and now < self._next_at.get(provider, 0.0):
-                breaker._probe_in_flight = False
-                raise AcquisitionError('local_rate_limit', attempts=0)
-            if not self._charge_quota(provider, weight, now):
-                breaker._probe_in_flight = False
-                health.quota_rejections += 1
-                raise AcquisitionError('quota_exceeded', attempts=attempts)
-            self._next_at[provider] = now + pol.min_gap_seconds
-            attempts += 1
-            health.requests += 1
+            attempts, result, delay = self._attempt(provider, route, url, key, pol, cpol, health, require_json, attempts)
+            if result is not None:
+                return result
+            self.clock.sleep(delay)  # backoff / honoured Retry-After: no lock held
+        raise AcquisitionError('retries_exhausted', attempts=attempts)  # defensive; loop is bounded
+
+    def _attempt(self, provider, route, url, key, pol, cpol, health, require_json, attempts):
+        """One bounded attempt. Returns (attempts, result, None) or (attempts, None, delay_before_retry),
+        or raises. The breaker ticket is settled exactly once on every exit path."""
+        plock, breaker, weight = self._plock(provider), self._breaker(provider), ROUTE_WEIGHTS.get(route, 1)
+        ticket = None
+        try:
+            with plock:  # short critical section: admission only
+                now = self.clock.now()
+                cooldown = self._cooldown.get(provider, 0.0)
+                if now < cooldown:
+                    health.circuit_rejections += 1
+                    raise AcquisitionError('rate_limited', retry_after_seconds=cooldown - now, attempts=attempts,
+                                           detail='provider_cooldown_active')
+                ticket = breaker.allow(now)
+                if ticket is None:
+                    health.circuit_rejections += 1
+                    raise AcquisitionError('circuit_open', retry_after_seconds=max(0.0, breaker.opened_until - now),
+                                           attempts=attempts)
+                if attempts == 0 and now < self._next_at.get(provider, 0.0):
+                    raise AcquisitionError('local_rate_limit', attempts=0)
+                if not self._charge_quota(provider, weight, now):
+                    health.quota_rejections += 1
+                    raise AcquisitionError('quota_exceeded', attempts=attempts)
+                self._next_at[provider] = now + pol.min_gap_seconds
+                attempts += 1
+                health.requests += 1
             code, retry_after, retryable = None, None, False
-            try:
+            try:  # network I/O: no lock held
                 resp = self.transport(url, headers=self.headers, timeout=pol.timeout_seconds, max_bytes=self.max_bytes)
             except TransportTimeout:
-                health.timeouts += 1
+                with plock:
+                    health.timeouts += 1
                 code, retryable = 'upstream_timeout', True
             except TransportError:
                 code, retryable = 'network_unavailable', True
-            else:
-                if resp.status == 200:
-                    if len(resp.body) > self.max_bytes:
-                        breaker.failure(self.clock.now())
-                        health.failures += 1
-                        health.last_error = 'response_too_large'
-                        raise AcquisitionError('response_too_large', attempts=attempts)
-                    if require_json and 'json' not in resp.headers.get('content-type', '').lower():
-                        breaker.failure(self.clock.now())
-                        health.failures += 1
-                        health.last_error = 'invalid_content_type'
-                        raise AcquisitionError('invalid_content_type', attempts=attempts)
-                    breaker.success()
-                    health.successes += 1
-                    health.last_success_at = self.clock.now()
-                    retrieved = self.clock.now()
-                    if self.cache is not None:
-                        self.cache.put(key, provider, route, url, resp.body, retrieved, cpol)
-                    return AcquisitionResult(resp.body, provider, route, url, retrieved,
-                                             {'status': LIVE, 'served_from_cache': False,
-                                              'retrieved_at_utc': iso(retrieved), 'age_seconds': 0.0}, attempts)
-                if 300 <= resp.status < 400:
+            except ValueError as exc:
+                if str(exc) != 'redirect_forbidden':  # core.NoRedirect surfaces a redirect as this error
+                    raise  # unexpected: ticket is released in ``finally`` and the error propagates
+                with plock:
                     health.failures += 1
                     health.last_error = 'redirect_forbidden'
-                    raise AcquisitionError('redirect_forbidden', attempts=attempts)
+                raise AcquisitionError('redirect_forbidden', attempts=attempts)
+            else:
+                if resp.status == 200:
+                    return attempts, self._accept(provider, route, url, key, cpol, health, breaker, ticket,
+                                                  resp, require_json, attempts), None
+                if 300 <= resp.status < 400:
+                    with plock:
+                        health.failures += 1
+                        health.last_error = 'redirect_forbidden'
+                    raise AcquisitionError('redirect_forbidden', attempts=attempts)  # ticket released in finally
                 if resp.status in RATE_LIMIT_HTTP:
-                    health.rate_limited += 1
                     retry_after = parse_retry_after(resp.headers.get('retry-after'), self.clock.now())
                     code, retryable = 'rate_limited', retry_after is not None and resp.status == 429
+                    with plock:
+                        health.rate_limited += 1
                 elif resp.status in RETRYABLE_HTTP:
                     code, retryable = f'upstream_http_{resp.status}', True
                     retry_after = parse_retry_after(resp.headers.get('retry-after'), self.clock.now())
                 else:
                     code = f'upstream_http_{resp.status}'  # 4xx etc.: permanent, not retried
-            health.failures += 1
-            health.last_error = code
-            # Retry-After is binding for rate limits: cool the provider down regardless of outcome.
-            if code == 'rate_limited':
-                wait = retry_after if retry_after is not None else pol.breaker_open_seconds
-                self._cooldown[provider] = self.clock.now() + wait
-                breaker.failure(self.clock.now(), cooldown=wait)
-            elif retryable or code.startswith('upstream_http_5'):
-                breaker.failure(self.clock.now())
-            else:
-                breaker._probe_in_flight = False  # permanent client error: not a provider-health failure
-                raise AcquisitionError(code, attempts=attempts)
-            if not retryable or attempts >= pol.max_attempts:
-                raise AcquisitionError(code, retry_after_seconds=retry_after, attempts=attempts)
-            if code == 'rate_limited':
-                if retry_after > pol.max_retry_after_wait_seconds:
-                    raise AcquisitionError(code, retry_after_seconds=retry_after, attempts=attempts)
-                delay = retry_after
-                self._cooldown.pop(provider, None)  # we honour the wait by sleeping it out
-                breaker.state, breaker._probe_in_flight = CLOSED, False
-            else:
-                if breaker.state == OPEN:  # threshold reached mid-retry: stop, do not hammer
+            with plock:  # short critical section: failure accounting + retry decision
+                health.failures += 1
+                health.last_error = code
+                now = self.clock.now()
+                if code == 'rate_limited':
+                    wait = retry_after if retry_after is not None else pol.breaker_open_seconds
+                    # Retry-After is binding: cool the provider down even if this call gives up.
+                    self._cooldown[provider] = max(self._cooldown.get(provider, 0.0), now + wait)
+                    will_sleep_and_retry = (retryable and attempts < pol.max_attempts
+                                            and retry_after <= pol.max_retry_after_wait_seconds)
+                    # If we will wait the window out in-call, the failure is counted but does not by
+                    # itself open the breaker; when we give up (or the threshold trips) it does.
+                    breaker.failure(ticket, now, cooldown=0.0 if will_sleep_and_retry else wait)
+                elif retryable:
+                    breaker.failure(ticket, now)
+                else:
+                    breaker.release(ticket)  # permanent client error: not a provider-health failure
                     raise AcquisitionError(code, attempts=attempts)
-                delay = min(pol.backoff_cap_seconds, pol.backoff_base_seconds * (2 ** (attempts - 1)))
-                delay *= 0.5 + 0.5 * self.jitter()  # bounded jitter in [0.5x, 1.0x)
-                if retry_after is not None:
-                    delay = max(delay, min(retry_after, pol.max_retry_after_wait_seconds))
-            health.retries += 1
-            self.clock.sleep(delay)
-        raise AcquisitionError('retries_exhausted', attempts=attempts)  # defensive; loop is bounded
+                give_up = (not retryable or attempts >= pol.max_attempts or breaker.state != CLOSED
+                           or (code == 'rate_limited' and retry_after > pol.max_retry_after_wait_seconds))
+                if give_up:  # includes breaker tripped mid-retry: stop, do not hammer
+                    raise AcquisitionError(code, retry_after_seconds=retry_after, attempts=attempts)
+                if code == 'rate_limited':
+                    delay = retry_after
+                else:
+                    delay = min(pol.backoff_cap_seconds, pol.backoff_base_seconds * (2 ** (attempts - 1)))
+                    delay *= 0.5 + 0.5 * self.jitter()  # bounded jitter in [0.5x, 1.0x)
+                    if retry_after is not None:
+                        delay = max(delay, min(retry_after, pol.max_retry_after_wait_seconds))
+                health.retries += 1
+            return attempts, None, delay
+        finally:
+            breaker.release(ticket)  # no-op if already settled; frees a probe on any other exit
+
+    def _accept(self, provider, route, url, key, cpol, health, breaker, ticket, resp, require_json, attempts):
+        plock = self._plock(provider)
+        problem = None
+        if len(resp.body) > self.max_bytes:
+            problem = 'response_too_large'
+        elif require_json and 'json' not in resp.headers.get('content-type', '').lower():
+            problem = 'invalid_content_type'
+        if problem:
+            with plock:
+                breaker.failure(ticket, self.clock.now())
+                health.failures += 1
+                health.last_error = problem
+            raise AcquisitionError(problem, attempts=attempts)
+        retrieved = self.clock.now()
+        with plock:
+            breaker.success(ticket)
+            health.successes += 1
+            health.last_success_at = retrieved
+        if self.cache is not None:
+            self.cache.put(key, provider, route, url, resp.body, retrieved, cpol)
+        return AcquisitionResult(resp.body, provider, route, url, retrieved,
+                                 {'status': LIVE, 'served_from_cache': False,
+                                  'retrieved_at_utc': iso(retrieved), 'age_seconds': 0.0}, attempts)
 
     # -- diagnostics -----------------------------------------------------------
     def health(self) -> dict[str, dict[str, Any]]:
         now = self.clock.now()
         out = {}
-        for provider in sorted(set(self._health) | set(self._breakers)):
-            h, b, p = self._health.get(provider, _Health()), self._breaker(provider), self._policy(provider)
-            used = sum(w for t, w in self._quota.get(provider, []) if now - t < p.quota_window_seconds)
-            out[provider] = {
-                'circuit_state': b.state if not (b.state == OPEN and now >= b.opened_until) else HALF_OPEN,
-                'consecutive_failures': b.failures,
-                'circuit_open_until_utc': iso(b.opened_until) if b.state == OPEN and now < b.opened_until else None,
-                'cooldown_until_utc': iso(self._cooldown[provider]) if self._cooldown.get(provider, 0) > now else None,
-                'quota_used': used, 'quota_budget': p.quota_budget,
-                'requests': h.requests, 'successes': h.successes, 'failures': h.failures,
-                'retries': h.retries, 'rate_limited': h.rate_limited, 'timeouts': h.timeouts,
-                'cache_hits': h.cache_hits, 'stale_served': h.stale_served,
-                'circuit_rejections': h.circuit_rejections, 'quota_rejections': h.quota_rejections,
-                'last_error': h.last_error,
-                'last_success_at_utc': iso(h.last_success_at) if h.last_success_at else None,
-                'as_of_utc': iso(now),
-            }
+        with self._registry:
+            providers = sorted(set(self._health) | set(self._breakers))
+        for provider in providers:
+            h, b, p = self._hl(provider), self._breaker(provider), self._policy(provider)
+            with self._plock(provider):
+                out[provider] = self._health_row(provider, h, b, p, now)
         return out
+
+    def _health_row(self, provider, h, b, p, now):
+        used = sum(w for t, w in self._quota.get(provider, []) if now - t < p.quota_window_seconds)
+        return {
+            'circuit_state': b.state if not (b.state == OPEN and now >= b.opened_until) else HALF_OPEN,
+            'consecutive_failures': b.failures,
+            'circuit_open_until_utc': iso(b.opened_until) if b.state == OPEN and now < b.opened_until else None,
+            'cooldown_until_utc': iso(self._cooldown[provider]) if self._cooldown.get(provider, 0) > now else None,
+            'quota_used': used, 'quota_budget': p.quota_budget,
+            'requests': h.requests, 'successes': h.successes, 'failures': h.failures,
+            'retries': h.retries, 'rate_limited': h.rate_limited, 'timeouts': h.timeouts,
+            'cache_hits': h.cache_hits, 'stale_served': h.stale_served,
+            'circuit_rejections': h.circuit_rejections, 'quota_rejections': h.quota_rejections,
+            'last_error': h.last_error,
+            'last_success_at_utc': iso(h.last_success_at) if h.last_success_at else None,
+            'as_of_utc': iso(now),
+        }

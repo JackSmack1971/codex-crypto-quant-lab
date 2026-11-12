@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from threading import Lock
-from time import monotonic
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -92,20 +90,6 @@ class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise ValueError('redirect_forbidden')
 
-
-class RateBucket:
-    """Conservative per-provider minimum time between calls; no IP or host rotation."""
-    def __init__(self):
-        self.lock = Lock()
-        self.next_at: dict[str, float] = {}
-    def check(self, provider: str):
-        gap = {'binance_spot': .4, 'binance_usdm': .6, 'dexscreener': .5,
-               'defillama': 1.0, 'mempool': 1.0}[provider]
-        with self.lock:
-            now = monotonic()
-            if now < self.next_at.get(provider, 0):
-                raise RuntimeError('local_rate_limit')
-            self.next_at[provider] = now + gap
 
 _OPENER = build_opener(NoRedirect())
 _ACQUIRER: _acq.Acquirer | None = None

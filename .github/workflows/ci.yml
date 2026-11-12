@@ -38,7 +38,7 @@ jobs:
           set -e
           for t in test_core test_reporting test_control_plane_validator test_mission_completion test_mission_integrity \
                    test_acquisition test_research_lab test_research_expansion test_research_workflows \
-                   test_research_v24 test_research_explorer_v24; do
+                   test_research_v24 test_research_explorer_v24 test_p0_regressions; do
             python -m unittest "tests.$t" -v
           done
 
