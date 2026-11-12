@@ -19,7 +19,7 @@
     ".codex/agents/report_editor.toml": "5b4dee1d894465fb058bc89d284b3746e5572f2e59ec127749f5b299374cc89a",
     ".codex/agents/source_verifier.toml": "3b8d044addab845c3ae34bd665bceff87d5b0332177cc16f6d18820f73820610",
     ".codex/config.toml": "c3b1c854c10bf18549fd2694afba99c0c62771f262cb37c550ea3e904356d67c",
-    ".github/workflows/ci.yml": "caf942c985af35428af781644ad8a838ed1dd3c8ce36fa650786c25f26ae352e",
+    ".github/workflows/ci.yml": "6a4f557aeb15ff38dc1c617aa752f2ee2f6141354d4439a800aeb0af1dd36c4c",
     ".github/workflows/live-providers.yml": "942442cffad44a891280ce2a329ed6bcb4ce246fd1aca639d98543335ac92990",
     ".gitignore": "1938735e29acca084c1d7072af20bf0a77f598a86c1dedaedceca0e3c86c17a0",
     "AGENTS.md": "aa7e2d70a18415bc0c8c005761129f560b549f9277b6c95677b63e840c6aa0bc",

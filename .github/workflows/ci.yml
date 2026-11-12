@@ -64,7 +64,7 @@ jobs:
         run: |
           python -m pip check
           python scripts/check_dependencies.py --installed
-      - name: Fixture mission bundle integrity (archive-less fixture: PARTIALLY_VERIFIED is expected; archive-backed exit 0 is gated in test_mission_e2e)
+      - name: Fixture mission bundle integrity (archive-less fixture, PARTIALLY_VERIFIED expected, archive-backed exit 0 gated in test_mission_e2e)
         run: python scripts/verify_mission.py tests/fixtures/synthetic-mission-bundle --allow-partial
       - name: pytest (live provider tests are skipped unless QUANT_LIVE_TESTS=1)
         run: python -m pytest tests -q
