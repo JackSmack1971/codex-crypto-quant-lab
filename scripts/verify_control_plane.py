@@ -86,6 +86,13 @@ def main() -> int:
         except (SyntaxError,UnicodeError) as exc:errors.append('invalid script '+name+': '+str(exc))
     for name in ('test_research_v24.py','test_research_explorer_v24.py'):
         if not (ROOT/'tests'/name).is_file():errors.append('missing new test '+name)
+    for rel in ('quant_free_mcp/acquisition.py','research_lab/completion.py','research_lab/mission_integrity.py','scripts/check_dependencies.py'):
+        module=ROOT/rel
+        if not module.is_file():errors.append('missing P0 module '+rel);continue
+        try:ast.parse(module.read_text(encoding='utf-8'),filename=str(module))
+        except (SyntaxError,UnicodeError) as exc:errors.append('invalid P0 module '+rel+': '+str(exc))
+    for rel in ('.github/workflows/ci.yml','.github/workflows/live-providers.yml','constraints-ci.txt','tests/test_acquisition.py','tests/test_mission_integrity.py','tests/live/test_live_providers.py'):
+        if not (ROOT/rel).is_file():errors.append('missing P0 qualification file '+rel)
     try:
         manifest=json.loads((ROOT/'PACKAGE-MANIFEST.json').read_text(encoding='utf8'))
         errors.extend(_manifest_errors(ROOT,manifest))

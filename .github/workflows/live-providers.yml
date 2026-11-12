@@ -1,0 +1,19 @@
+# Opt-in live probes of public, credential-free providers. Manual trigger only; never a
+# prerequisite for offline-ci. Failures here reflect provider/jurisdiction availability.
+name: live-providers
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      QUANT_LIVE_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m unittest tests.live.test_live_providers -v

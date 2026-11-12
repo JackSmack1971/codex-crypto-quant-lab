@@ -1,0 +1,67 @@
+# Offline qualification. No step contacts a market-data provider; provider behaviour is covered by
+# deterministic injected transports/clocks (tests/test_acquisition.py). Live probes live in
+# live-providers.yml and are manual/opt-in only.
+name: offline-ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: offline-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stdlib:
+    name: stdlib suites (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Structural and package-manifest validation
+        run: python scripts/verify_control_plane.py
+      - name: Syntax and import checks
+        run: |
+          python -m compileall -q quant_free_mcp research_lab scripts src tests
+          python -c "import quant_free_mcp.core, quant_free_mcp.acquisition, quant_free_mcp.adapters, quant_free_mcp.math, research_lab.completion, research_lab.mission_integrity, research_lab.provider_policy, research_lab.archive"
+      - name: Dependency declaration check
+        run: python scripts/check_dependencies.py
+      - name: Core, reporting, research, mission-integrity and provider fault-injection tests
+        run: |
+          set -e
+          for t in test_core test_reporting test_control_plane_validator test_mission_completion test_mission_integrity \
+                   test_acquisition test_research_lab test_research_expansion test_research_workflows \
+                   test_research_v24 test_research_explorer_v24; do
+            python -m unittest "tests.$t" -v
+          done
+
+  full:
+    name: full suite with pinned direct dependencies (Python 3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-ci.txt
+      - name: Install pinned direct dependencies (project is run from the checkout; no build artifacts)
+        run: python -m pip install -c constraints-ci.txt mcp numpy pandas pytest
+      - name: Dependency consistency
+        run: |
+          python -m pip check
+          python scripts/check_dependencies.py --installed
+      - name: Fixture mission bundle verifies
+        run: python scripts/verify_mission.py tests/fixtures/synthetic-mission-bundle
+      - name: pytest (live provider tests are skipped unless QUANT_LIVE_TESTS=1)
+        run: python -m pytest tests -q

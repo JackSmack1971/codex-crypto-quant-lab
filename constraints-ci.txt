@@ -1,0 +1,7 @@
+# Direct-dependency pins used by the full offline CI job (Python >=3.12; numpy 2.5.x requires it).
+# Transitive dependencies are NOT locked; `pip check` is run, but resolution is not byte-reproducible.
+# Every pin must satisfy the matching range in pyproject.toml (enforced by scripts/check_dependencies.py).
+mcp==2.3.0
+numpy==2.5.3
+pandas==2.3.3
+pytest==9.2.0
