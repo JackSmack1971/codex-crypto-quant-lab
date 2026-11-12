@@ -66,6 +66,10 @@ class V24Tests(unittest.TestCase):
             db.move('x','RECONCILING','RUNNING',T)
             db.move('x','RUNNING','COMPLETED',T,result={'ok':True})
             self.assertEqual(db.get('x')['state'],'COMPLETED')
+            # This valid-shaped transition reaches the SQL transaction and fails
+            # on stale state; TemporaryDirectory cleanup verifies the connection
+            # was closed on the exceptional path as well.
+            with self.assertRaises(ContractError):db.move('x','RUNNING','FAILED',T)
     def test_source_compatibility(self):
         c=MetricContract('venue:btc','funding','rate','venue','8h','provider')
         candidate={'provider':'p','contract':c.__dict__,'status':'OBSERVED','observed_at_utc':T,'available_at_utc':T}

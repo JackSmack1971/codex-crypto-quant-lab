@@ -1,5 +1,6 @@
 """Deterministic, offline structural validator for shipped control-plane artifacts."""
 from pathlib import Path
+import os
 import json
 import sys
 import tomllib
@@ -12,6 +13,41 @@ AXES=['identity.json','12-axis-matrix.md','model-policy.md','authority.md','runt
 SKILLS=['crypto-ohlcv-fetch','crypto-indicators','crypto-backtest','crypto-research',
         'crypto-report','crypto-strategy-lab','crypto-temporal-validation','crypto-hypothesis','crypto-research-ledger','crypto-data-quality','crypto-defi','crypto-derivatives','crypto-risk']
 AGENTS=['market_researcher','onchain_researcher','methodology_reviewer','report_editor','source_verifier']
+
+def _managed_files(root: Path) -> set[str]:
+    """Return package files, excluding only repository metadata and runtime output."""
+    ignored_dirs={'.git','.venv','__pycache__','.pytest_cache'}
+    present=set()
+    for current, dirs, files in os.walk(root):
+        current_path=Path(current)
+        relative_dir=current_path.relative_to(root)
+        dirs[:]=[name for name in dirs if name not in ignored_dirs]
+        # Reports are user-generated at runtime under reports/<run-id>/; keep
+        # the package's root-level .gitkeep but do not package report contents.
+        if relative_dir == Path('reports'):
+            dirs.clear()
+        for name in files:
+            path=current_path/name
+            relative=path.relative_to(root)
+            if relative.as_posix()=='PACKAGE-MANIFEST.json':
+                continue
+            if name.endswith(('.pyc','.sqlite','.sqlite-wal','.sqlite-shm')):
+                continue
+            present.add(relative.as_posix())
+    return present
+
+def _manifest_errors(root: Path, manifest: dict) -> list[str]:
+    import hashlib
+    errors=[]
+    entries=manifest['files']
+    for path, expected in entries.items():
+        source=root/path
+        if not source.is_file():errors.append('manifest file missing '+path)
+        elif hashlib.sha256(source.read_bytes()).hexdigest()!=expected:errors.append('manifest hash mismatch '+path)
+    present=_managed_files(root)
+    if set(entries)!=present:
+        errors.append('manifest file set mismatch: '+str(sorted(present^set(entries))))
+    return errors
 
 def main() -> int:
     errors=[]
@@ -51,16 +87,8 @@ def main() -> int:
     for name in ('test_research_v24.py','test_research_explorer_v24.py'):
         if not (ROOT/'tests'/name).is_file():errors.append('missing new test '+name)
     try:
-        import hashlib
         manifest=json.loads((ROOT/'PACKAGE-MANIFEST.json').read_text(encoding='utf8'))
-        for path, expected in manifest['files'].items():
-            source=ROOT/path
-            if not source.is_file():errors.append('manifest file missing '+path)
-            elif hashlib.sha256(source.read_bytes()).hexdigest()!=expected:errors.append('manifest hash mismatch '+path)
-        present={str(path.relative_to(ROOT)).replace('\\','/') for path in ROOT.rglob('*')
-                 if path.is_file() and '__pycache__' not in path.parts and path.name!='PACKAGE-MANIFEST.json'}
-        if set(manifest['files'])!=present:
-            errors.append('manifest file set mismatch: '+str(sorted(present^set(manifest['files']))))
+        errors.extend(_manifest_errors(ROOT,manifest))
     except (ValueError,OSError,KeyError,TypeError) as exc:
         errors.append('manifest integrity failure: '+str(exc))
 
