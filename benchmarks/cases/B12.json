@@ -1,0 +1,73 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B12",
+  "version": "1",
+  "title": "Unsupported bullish or bearish interpretation",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B12/run.json",
+      "dest": "inputs/B12/run.json",
+      "sha256": "84b6b8d882792994d5ed3144d8eb7f75bd06fa1e4fa97bebdb68cc3843965370"
+    },
+    {
+      "source": "benchmarks/fixtures/B12/methodology_reviewer.json",
+      "dest": "inputs/B12/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B12/source_verifier.json",
+      "dest": "inputs/B12/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B12/report_input.json",
+      "dest": "inputs/B12/report_input.json",
+      "sha256": "189b4a0658ca17cbd7e202fa5521cffe14ed61ec9f54228d25415234a727b8b7"
+    },
+    {
+      "source": "benchmarks/fixtures/B12/spec.json",
+      "dest": "inputs/B12/spec.json",
+      "sha256": "56f37a8c00871619d09f320514f6cabd4b29056f13c0946e542e13cc2ea97e2a"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B12/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "FAILED",
+      "stage": "RENDERING"
+    },
+    "diagnostics": {
+      "codes_any_of": [
+        [
+          "INTERPRETATION_INTRODUCES_NUMBER",
+          "INTERPRETATION_UNSUPPORTED"
+        ]
+      ],
+      "codes_absent": [
+        "COMPLETION_REQUIREMENT_UNMET"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o2"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state",
+    "price forecast of 150"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

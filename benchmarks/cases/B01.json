@@ -1,0 +1,147 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B01",
+  "version": "1",
+  "title": "Valid complete offline research mission",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B01/run.json",
+      "dest": "inputs/B01/run.json",
+      "sha256": "5b6c0b95437e474d2e820d89e28493b7e817f08cff0fca4ab3969757ae923f8f"
+    },
+    {
+      "source": "benchmarks/fixtures/B01/methodology_reviewer.json",
+      "dest": "inputs/B01/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B01/source_verifier.json",
+      "dest": "inputs/B01/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B01/report_input.json",
+      "dest": "inputs/B01/report_input.json",
+      "sha256": "296a80f43c6e6855fbd093c26d9b913ffcb124a80d82a19831e9f1da2d186bd0"
+    },
+    {
+      "source": "benchmarks/fixtures/B01/spec.json",
+      "dest": "inputs/B01/spec.json",
+      "sha256": "f9760b8b705e9dc6ed260ac8782035b021130e8bf3c1e7022bfaabe14b332cdb"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B01/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "EVALUABLE",
+      "completion_state": "COMPLETE"
+    },
+    "diagnostics": {
+      "codes_absent": [
+        "STALE",
+        "FUTURE_DATED",
+        "CONTRADICTORY",
+        "VERIFICATION_FAILED",
+        "OPERATION_ERROR"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o2",
+        "o3"
+      ]
+    },
+    "quantitative": [
+      {
+        "claim_id": "D:chg",
+        "value": "10",
+        "tolerance": "0",
+        "classification": "D"
+      },
+      {
+        "claim_id": "D:pct",
+        "value": "21",
+        "tolerance": "0",
+        "classification": "D"
+      }
+    ],
+    "chart_lineage": {
+      "charts": [
+        {
+          "chart_id": "mid-history",
+          "sample_count": 3,
+          "observation_ids": [
+            "o1",
+            "o2",
+            "o3"
+          ]
+        }
+      ]
+    },
+    "report_contract": {
+      "sections": [
+        "executive thesis",
+        "question and horizon",
+        "evidence quality and freshness",
+        "key findings",
+        "instrument and venue alignment",
+        "scenarios",
+        "assumptions and falsifiers",
+        "risk and failure conditions",
+        "methods and provider fallback",
+        "bibliography",
+        "missing data"
+      ],
+      "md_contains": [
+        "[R]",
+        "[D]",
+        "[I] BASE",
+        "[I] BULL",
+        "[I] BEAR",
+        "Falsifier"
+      ],
+      "md_absent": [
+        "INSUFFICIENT_EVIDENCE / NO_TRADE"
+      ],
+      "html_contains": [
+        "<svg",
+        "<details>",
+        "role=\"img\"",
+        "<caption>"
+      ],
+      "claim_classes_present": [
+        "R",
+        "D"
+      ],
+      "claim_classes_absent": [
+        "U"
+      ],
+      "no_scripts_or_remote_assets": true
+    },
+    "missing_data": {
+      "unavailable_claims": [],
+      "no_claims": [
+        "U:binance:spot:BTCUSDT|spot.quote.mid"
+      ],
+      "grade": "OBSERVATIONS_ONLY_NOT_A_TRADE_SIGNAL"
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

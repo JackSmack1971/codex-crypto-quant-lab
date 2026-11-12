@@ -1,0 +1,47 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B19",
+  "version": "1",
+  "title": "Historical comparison with incompatible metric definitions",
+  "harness": "history",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B19/rev1.json",
+      "dest": "inputs/B19/rev1.json",
+      "sha256": "48e4f497a21b6cfb4c847f93f1d85781d76fca403e9c421c5e42e010cba0e4f1"
+    },
+    {
+      "source": "benchmarks/fixtures/B19/rev2.json",
+      "dest": "inputs/B19/rev2.json",
+      "sha256": "6efc0fe49380f959c43a405ea32a4a81d0ebf8e5be9b0fe6f9a5f75aaa250782"
+    }
+  ],
+  "scenario": {
+    "revisions": [
+      "inputs/B19/rev1.json",
+      "inputs/B19/rev2.json"
+    ]
+  },
+  "expected": {
+    "history": {
+      "validity": "NOT_REASSESSED",
+      "coverage_assessment": "NOT_REASSESSED",
+      "metric_status": {
+        "mid": "NON_COMPARABLE"
+      },
+      "synthetic_change_figure_present": false
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

@@ -25,8 +25,8 @@ STAGE_OPERATIONS = {
     'RECONCILING': ('reconcile.sources', '1'),
     'ANALYZING': ('analyze.hypotheses', '1'),
     'VERIFYING': ('verify.stage_artifacts', '1'),
-    'RENDERING': ('render.local_report', '1'),
-    'FINALIZING': ('finalize.bundle', '1'),
+    'RENDERING': ('render.local_report', '2'),
+    'FINALIZING': ('finalize.bundle', '2'),
 }
 KNOWN_OPERATIONS = frozenset(op for op, _ in STAGE_OPERATIONS.values())
 REVIEWERS = ('methodology_reviewer', 'source_verifier')
@@ -192,11 +192,13 @@ def _validate(spec: Any) -> dict:
             bad('SPEC_OPERATION_UNKNOWN', 'permitted_operations', f'unknown operation id: {op!r}')
     inputs = spec['inputs']
     if not isinstance(inputs, dict) or not _file_ref(inputs.get('research_run')) or \
-            set(inputs) - {'research_run', 'provider_attempts', 'reviewer_handoffs'}:
-        bad('SPEC_FIELD_INVALID', 'inputs', 'needs research_run {path, sha256}; optional provider_attempts, reviewer_handoffs')
+            set(inputs) - {'research_run', 'provider_attempts', 'reviewer_handoffs', 'report_input'}:
+        bad('SPEC_FIELD_INVALID', 'inputs', 'needs research_run {path, sha256}; optional provider_attempts, reviewer_handoffs, report_input')
     else:
         if 'provider_attempts' in inputs and not _file_ref(inputs['provider_attempts']):
             bad('SPEC_FIELD_INVALID', 'inputs.provider_attempts', 'needs exactly path and sha256')
+        if 'report_input' in inputs and not _file_ref(inputs['report_input']):
+            bad('SPEC_FIELD_INVALID', 'inputs.report_input', 'needs exactly path and sha256')
         handoffs = inputs.get('reviewer_handoffs', {})
         if not isinstance(handoffs, dict) or set(handoffs) - set(REVIEWERS) or not all(_file_ref(v) for v in handoffs.values()):
             bad('SPEC_FIELD_INVALID', 'inputs.reviewer_handoffs', f'keys must be within {list(REVIEWERS)} with {{path, sha256}}')

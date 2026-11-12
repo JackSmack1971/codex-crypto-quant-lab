@@ -1,0 +1,78 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B17",
+  "version": "1",
+  "title": "Unauthenticated reviewer handoff",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B17/methodology_reviewer.json",
+      "dest": "inputs/B17/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B17/source_verifier.json",
+      "dest": "inputs/B17/source_verifier.json",
+      "sha256": "e7451fb61f6bda22e2034e3f5e08f793be5ef8c67d23fe09823cbb7c85dd2fce"
+    },
+    {
+      "source": "benchmarks/fixtures/B17/run.json",
+      "dest": "inputs/B17/run.json",
+      "sha256": "66dd2a7bfe9a69584de4c8435a7c64127f5e2cc2dbf0d67074bf168602cb52f3"
+    },
+    {
+      "source": "benchmarks/fixtures/B17/spec.json",
+      "dest": "inputs/B17/spec.json",
+      "sha256": "c49035d13ebc493b6186ef4368cdb2a286b3d4212890dbdbb10430e197beb139"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B17/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "BLOCKED",
+      "stage": "FINALIZING"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "REQUIRED_EVIDENCE_UNAVAILABLE"
+      ],
+      "codes_absent": [
+        "VERIFICATION_FAILED"
+      ]
+    },
+    "reviews": {
+      "methodology_reviewer": {
+        "state": "PASS",
+        "authenticated": false
+      },
+      "source_verifier": {
+        "state": "NOT_PERFORMED"
+      }
+    },
+    "report_contract": {
+      "md_contains": [
+        "unauthenticated"
+      ],
+      "md_absent": [
+        "Reviews are authenticated",
+        "authenticated reviewer approval"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state",
+    "independent review",
+    "authenticated reviewer approval"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

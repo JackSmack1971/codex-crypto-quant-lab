@@ -1,0 +1,69 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B08",
+  "version": "1",
+  "title": "Unsupported numerical transformation",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B08/run.json",
+      "dest": "inputs/B08/run.json",
+      "sha256": "fe6256d03f02797e6508b9e5731133ab04cf3403af59ba6d1f69fa971edeb4f4"
+    },
+    {
+      "source": "benchmarks/fixtures/B08/methodology_reviewer.json",
+      "dest": "inputs/B08/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B08/source_verifier.json",
+      "dest": "inputs/B08/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B08/report_input.json",
+      "dest": "inputs/B08/report_input.json",
+      "sha256": "9f364be770155916b59f9689c90be5482547d62a1fa3d25ea36213af530447a9"
+    },
+    {
+      "source": "benchmarks/fixtures/B08/spec.json",
+      "dest": "inputs/B08/spec.json",
+      "sha256": "98791094218c61030ab57b5fb0e4a2b6b47be32280091fa4658ee0299055f451"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B08/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "FAILED",
+      "stage": "RENDERING"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "REPORT_TRANSFORM_UNSUPPORTED"
+      ],
+      "codes_absent": [
+        "COMPLETION_REQUIREMENT_UNMET"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o2"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

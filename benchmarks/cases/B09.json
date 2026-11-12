@@ -1,0 +1,80 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B09",
+  "version": "1",
+  "title": "Tampered archived observation",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B09/run.json",
+      "dest": "inputs/B09/run.json",
+      "sha256": "63686bd57e3b0e9a05474f98ae3520607f14d5dc65413d674445ad20a4392d1a"
+    },
+    {
+      "source": "benchmarks/fixtures/B09/methodology_reviewer.json",
+      "dest": "inputs/B09/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B09/source_verifier.json",
+      "dest": "inputs/B09/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B09/spec.json",
+      "dest": "inputs/B09/spec.json",
+      "sha256": "39f614cb54c85ebecdace91ed484f47ed0e137c0f7fb4b9e69b71e5ad420c589"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B09/spec.json",
+    "steps": [
+      {
+        "op": "advance",
+        "count": 2
+      },
+      {
+        "op": "tamper_archive",
+        "observation_id": "o1"
+      },
+      {
+        "op": "run_to_end"
+      }
+    ]
+  },
+  "expected": {
+    "process": {
+      "job_state": "FAILED",
+      "stage": "RECONCILING"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "VERIFICATION_FAILED"
+      ],
+      "codes_absent": [
+        "COMPLETION_REQUIREMENT_UNMET"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o2",
+        "o3"
+      ],
+      "must_not_resolve": [
+        "o1"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B24",
+  "version": "1",
+  "title": "Derived value must not use an observation excluded as stale",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B24/run.json",
+      "dest": "inputs/B24/run.json",
+      "sha256": "ddd1052d9f6d7af7e89e4250fc7643d3b865d4a15c0a46714bb81def2bfc862c"
+    },
+    {
+      "source": "benchmarks/fixtures/B24/methodology_reviewer.json",
+      "dest": "inputs/B24/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B24/source_verifier.json",
+      "dest": "inputs/B24/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B24/report_input.json",
+      "dest": "inputs/B24/report_input.json",
+      "sha256": "29e20a3e593c7d42f973ab3981834d922c999b5c832a8ca296d61de0a659a2cd"
+    },
+    {
+      "source": "benchmarks/fixtures/B24/spec.json",
+      "dest": "inputs/B24/spec.json",
+      "sha256": "fde51d0ddb7bb9d53539d7092d5373afdbad1998a01f2038fb9839480039176c"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B24/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "FAILED",
+      "stage": "RENDERING"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "DERIVED_INPUT_INELIGIBLE",
+        "STALE"
+      ],
+      "codes_absent": [
+        "COMPLETION_REQUIREMENT_UNMET"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

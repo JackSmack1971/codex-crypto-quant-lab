@@ -1,0 +1,81 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B16",
+  "version": "1",
+  "title": "Concurrent conflicting stage claims",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B16/run.json",
+      "dest": "inputs/B16/run.json",
+      "sha256": "15e252be479eecad6256c5a28ab93f5aafda65693cc15e50183846710492afe7"
+    },
+    {
+      "source": "benchmarks/fixtures/B16/methodology_reviewer.json",
+      "dest": "inputs/B16/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B16/source_verifier.json",
+      "dest": "inputs/B16/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B16/report_input.json",
+      "dest": "inputs/B16/report_input.json",
+      "sha256": "36b70b07aac1858de148ded6c45422884c8692ebbe6798e9f80ed4543c791251"
+    },
+    {
+      "source": "benchmarks/fixtures/B16/spec.json",
+      "dest": "inputs/B16/spec.json",
+      "sha256": "4a6d4de6b41d99090cb69bd391e5c2b8fc5a21d68b7a9436ac489d7e16e4c66c"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B16/spec.json",
+    "steps": [
+      {
+        "op": "concurrent_advance",
+        "stage": "ANALYZING"
+      }
+    ]
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "EVALUABLE"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "RECOVERY_RECONCILIATION_REQUIRED"
+      ],
+      "codes_absent": [
+        "OPERATION_IDENTITY_CONFLICT"
+      ]
+    },
+    "recovery": {
+      "contested_stage": "ANALYZING",
+      "executor_outcomes": [
+        "ADVANCED",
+        "RECONCILIATION_REQUIRED"
+      ],
+      "winners": 1,
+      "stage_attempts": 1,
+      "stage_status": "SUCCEEDED",
+      "final_job_state": "COMPLETED"
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "claim": "claim recorded 2026-01-06T00:00:00Z",
+  "created_at_utc": "2026-01-06T00:00:00Z",
+  "evidence_ids": [
+    "ev-b",
+    "ev-c"
+  ],
+  "falsifier": "a later eligible observation outside the recorded range",
+  "state": "SUPPORTED",
+  "thesis_id": "thesis-1"
+}

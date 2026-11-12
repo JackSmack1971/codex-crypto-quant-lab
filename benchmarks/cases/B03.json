@@ -1,0 +1,73 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B03",
+  "version": "1",
+  "title": "Stale mandatory evidence",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B03/run.json",
+      "dest": "inputs/B03/run.json",
+      "sha256": "c24dfaa552dd711761bbb370275beb7e9db3af2cf1f7f3cd8a554841bfc87ef2"
+    },
+    {
+      "source": "benchmarks/fixtures/B03/methodology_reviewer.json",
+      "dest": "inputs/B03/methodology_reviewer.json",
+      "sha256": "52c6030704215cecb74bbedcdff58b5ab6a57fee8f7d377428d308a8bd7d61c9"
+    },
+    {
+      "source": "benchmarks/fixtures/B03/source_verifier.json",
+      "dest": "inputs/B03/source_verifier.json",
+      "sha256": "6f70c38779161f91bca64117bc0332794e482fea9b2e27ac216595dff97c66dc"
+    },
+    {
+      "source": "benchmarks/fixtures/B03/spec.json",
+      "dest": "inputs/B03/spec.json",
+      "sha256": "b0f986c9d3c2bfa27c3d76df19aaa62df5b436d5823751f90880593ed0345c1b"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B03/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "INSUFFICIENT_EVIDENCE",
+      "completion_state": "COMPLETE"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "STALE"
+      ],
+      "codes_absent": [
+        "VERIFICATION_FAILED",
+        "OPERATION_ERROR"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o9"
+      ]
+    },
+    "missing_data": {
+      "unavailable_claims": [
+        "U:binance:spot:BTCUSDT|spot.quote.mid"
+      ],
+      "no_claims": [],
+      "grade": "INSUFFICIENT_EVIDENCE / NO_TRADE"
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

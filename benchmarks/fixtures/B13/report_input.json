@@ -1,0 +1,14 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "key_findings": [
+    {
+      "claim_refs": [
+        "R:o9"
+      ],
+      "id": "f1",
+      "text": "Only an auxiliary metric is available."
+    }
+  ],
+  "mission_id": "B13",
+  "schema": "research-intelligence-report.v1"
+}

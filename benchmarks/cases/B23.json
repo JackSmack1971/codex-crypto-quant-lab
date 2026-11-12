@@ -1,0 +1,70 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B23",
+  "version": "1",
+  "title": "Percentage change from a negative base has the economic sign",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B23/run.json",
+      "dest": "inputs/B23/run.json",
+      "sha256": "ccea9bed49866fcc3668a92dd636ec5d6e4d369c2a8a0efe0648dac7c498fac5"
+    },
+    {
+      "source": "benchmarks/fixtures/B23/methodology_reviewer.json",
+      "dest": "inputs/B23/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B23/source_verifier.json",
+      "dest": "inputs/B23/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B23/report_input.json",
+      "dest": "inputs/B23/report_input.json",
+      "sha256": "dd95988f10100f1498e222a7df0f099a07a39b2932d565eb5966bc4bf3aea80e"
+    },
+    {
+      "source": "benchmarks/fixtures/B23/spec.json",
+      "dest": "inputs/B23/spec.json",
+      "sha256": "706053647f9fec1a3f09e4013adb16279a5e0a1dd787b47b95cfc743b8d3d499"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B23/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "EVALUABLE"
+    },
+    "quantitative": [
+      {
+        "claim_id": "D:fchg",
+        "value": "50",
+        "tolerance": "0",
+        "classification": "D"
+      }
+    ],
+    "evidence_references": {
+      "required_ids": [
+        "f1",
+        "f2"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

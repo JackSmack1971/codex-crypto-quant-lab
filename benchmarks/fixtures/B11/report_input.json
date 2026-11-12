@@ -1,0 +1,22 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "charts": [
+    {
+      "chart_id": "mixed",
+      "chart_type": "metric_history",
+      "series": [
+        {
+          "label": "mixed",
+          "observation_ids": [
+            "o1",
+            "o2",
+            "v1"
+          ]
+        }
+      ],
+      "title": "Price and volume"
+    }
+  ],
+  "mission_id": "B11",
+  "schema": "research-intelligence-report.v1"
+}

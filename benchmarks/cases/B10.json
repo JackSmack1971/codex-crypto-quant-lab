@@ -1,0 +1,74 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B10",
+  "version": "1",
+  "title": "Invalid chart sample reference",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B10/run.json",
+      "dest": "inputs/B10/run.json",
+      "sha256": "3ad5a3d91a91da14816301896633a4b69b412b7f6aa9cb100a7989b38b0cdd91"
+    },
+    {
+      "source": "benchmarks/fixtures/B10/methodology_reviewer.json",
+      "dest": "inputs/B10/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B10/source_verifier.json",
+      "dest": "inputs/B10/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B10/report_input.json",
+      "dest": "inputs/B10/report_input.json",
+      "sha256": "17b2c4bbbd0de60db120a4631791da2c217a6f1ef0556865db2c7c45d26578d8"
+    },
+    {
+      "source": "benchmarks/fixtures/B10/spec.json",
+      "dest": "inputs/B10/spec.json",
+      "sha256": "5ca78a511c0932d692e94a87e364e33ba9511b170ad336785a821846749686b9"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B10/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "FAILED",
+      "stage": "RENDERING"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "CHART_SAMPLE_UNRESOLVED"
+      ],
+      "codes_absent": [
+        "COMPLETION_REQUIREMENT_UNMET"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o2"
+      ]
+    },
+    "chart_lineage": {
+      "rejected_any_of": [
+        "CHART_SAMPLE_UNRESOLVED"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

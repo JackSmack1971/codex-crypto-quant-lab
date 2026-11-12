@@ -1,0 +1,73 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B07",
+  "version": "1",
+  "title": "Wrong instrument or venue identity",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B07/run.json",
+      "dest": "inputs/B07/run.json",
+      "sha256": "446114ab5b998b8b89fa5fac8c42fa654258aa8aed3427cf6fca984db4c2d34f"
+    },
+    {
+      "source": "benchmarks/fixtures/B07/methodology_reviewer.json",
+      "dest": "inputs/B07/methodology_reviewer.json",
+      "sha256": "52c6030704215cecb74bbedcdff58b5ab6a57fee8f7d377428d308a8bd7d61c9"
+    },
+    {
+      "source": "benchmarks/fixtures/B07/source_verifier.json",
+      "dest": "inputs/B07/source_verifier.json",
+      "sha256": "6f70c38779161f91bca64117bc0332794e482fea9b2e27ac216595dff97c66dc"
+    },
+    {
+      "source": "benchmarks/fixtures/B07/spec.json",
+      "dest": "inputs/B07/spec.json",
+      "sha256": "41a985efdce07936e5b2f662bcc1a4476d40b98dff20757ebdeefe96db1f261d"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B07/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "INSUFFICIENT_EVIDENCE",
+      "completion_state": "COMPLETE"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "OUT_OF_SCOPE_INSTRUMENT"
+      ],
+      "codes_absent": [
+        "VERIFICATION_FAILED",
+        "OPERATION_ERROR"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o9"
+      ]
+    },
+    "missing_data": {
+      "unavailable_claims": [
+        "U:binance:spot:BTCUSDT|spot.quote.mid"
+      ],
+      "no_claims": [],
+      "grade": "INSUFFICIENT_EVIDENCE / NO_TRADE"
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

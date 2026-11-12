@@ -1,0 +1,100 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B14",
+  "version": "1",
+  "title": "Interrupted research stage",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B14/run.json",
+      "dest": "inputs/B14/run.json",
+      "sha256": "731f0c8bc075ec905131a147bd6eb0c991278052a9b38e80bfa94e6b8e47a69d"
+    },
+    {
+      "source": "benchmarks/fixtures/B14/methodology_reviewer.json",
+      "dest": "inputs/B14/methodology_reviewer.json",
+      "sha256": "fd28d395f18187ecb7baf8f7edea87a514b422c86b04ed7b2d1238069067f592"
+    },
+    {
+      "source": "benchmarks/fixtures/B14/source_verifier.json",
+      "dest": "inputs/B14/source_verifier.json",
+      "sha256": "fbc7e6cf884f2cd8f4e5ce1d0b0fdb26d11b7e1f2a2928d5617aa3239a2cd8b4"
+    },
+    {
+      "source": "benchmarks/fixtures/B14/report_input.json",
+      "dest": "inputs/B14/report_input.json",
+      "sha256": "595d4b8d9e3fed6c0738b81a340864818cd3a7770f267c7924d946a77553e2d3"
+    },
+    {
+      "source": "benchmarks/fixtures/B14/spec.json",
+      "dest": "inputs/B14/spec.json",
+      "sha256": "fe92bb6945384a680709a1faaaf3af62287e01c60980d83cb4138688911a184a"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B14/spec.json",
+    "steps": [
+      {
+        "op": "advance",
+        "count": 3
+      },
+      {
+        "op": "crash",
+        "point": "after_admission",
+        "stage": "ANALYZING"
+      },
+      {
+        "op": "reconcile"
+      },
+      {
+        "op": "run_to_end"
+      }
+    ]
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "EVALUABLE",
+      "completion_state": "COMPLETE"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "RECOVERY_RECONCILIATION_REQUIRED"
+      ],
+      "codes_absent": [
+        "UNSAFE_REPLAY_BLOCKED",
+        "STAGE_OUTPUT_DIGEST_MISMATCH"
+      ]
+    },
+    "recovery": {
+      "crashed_at": "ANALYZING",
+      "crash_point": "after_admission",
+      "advance_after_crash": "RECONCILIATION_REQUIRED",
+      "reconcile_classification": "ABSENT",
+      "reconcile_decision": "RESUMED_DETERMINISTIC_OPERATION",
+      "final_job_state": "COMPLETED",
+      "stage_status": "SUCCEEDED",
+      "stage_attempts": 2
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o1",
+        "o2",
+        "o3"
+      ]
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "schema": "research-benchmark-case.v1",
+  "case_id": "B05",
+  "version": "1",
+  "title": "Contradictory values from incompatible sources",
+  "harness": "mission",
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "fixtures": [
+    {
+      "source": "benchmarks/fixtures/B05/run.json",
+      "dest": "inputs/B05/run.json",
+      "sha256": "e886bfde013e5adad1d4700f96cd5609242ffa52bdc98fcee5e9b93c97fa8569"
+    },
+    {
+      "source": "benchmarks/fixtures/B05/methodology_reviewer.json",
+      "dest": "inputs/B05/methodology_reviewer.json",
+      "sha256": "52c6030704215cecb74bbedcdff58b5ab6a57fee8f7d377428d308a8bd7d61c9"
+    },
+    {
+      "source": "benchmarks/fixtures/B05/source_verifier.json",
+      "dest": "inputs/B05/source_verifier.json",
+      "sha256": "6f70c38779161f91bca64117bc0332794e482fea9b2e27ac216595dff97c66dc"
+    },
+    {
+      "source": "benchmarks/fixtures/B05/spec.json",
+      "dest": "inputs/B05/spec.json",
+      "sha256": "e779a20090f37654a72db862827be909a023c46fb8cd0bc5e43dbbbd5bc9a759"
+    }
+  ],
+  "scenario": {
+    "spec": "inputs/B05/spec.json"
+  },
+  "expected": {
+    "process": {
+      "job_state": "COMPLETED",
+      "stage": "FINALIZING",
+      "research_state": "INSUFFICIENT_EVIDENCE",
+      "completion_state": "COMPLETE"
+    },
+    "diagnostics": {
+      "codes_present": [
+        "CONTRADICTORY"
+      ],
+      "codes_absent": [
+        "VERIFICATION_FAILED",
+        "OPERATION_ERROR"
+      ]
+    },
+    "evidence_references": {
+      "required_ids": [
+        "o9"
+      ],
+      "must_not_resolve": []
+    },
+    "missing_data": {
+      "unavailable_claims": [
+        "U:binance:spot:BTCUSDT|spot.quote.mid"
+      ],
+      "no_claims": [],
+      "grade": "INSUFFICIENT_EVIDENCE / NO_TRADE"
+    }
+  },
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ]
+}

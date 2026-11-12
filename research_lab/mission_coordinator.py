@@ -41,6 +41,8 @@ from .completion import verify as verify_bundle
 from .core import ContractError, Observation, ResearchSignal, digest, evaluate_hypothesis, _utc
 from .evals import evaluate_task
 from .jobs import JobStore
+from . import reporting
+from .reporting import ReportError
 from .mission_spec import (KNOWN_OPERATIONS, REVIEWERS, SCHEMA, STAGE_OPERATIONS, STAGES, MissionError,
                            resolve_under, spec_digest, validate_spec)
 
@@ -55,11 +57,11 @@ STAGE_OUTPUTS = {
     'RECONCILING': ('reconciliation.json',),
     'ANALYZING': ('analysis.json',),
     'VERIFYING': ('verification.json',),
-    'RENDERING': ('report.md', 'report.html'),
+    'RENDERING': ('report.md', 'report.html', 'report_content.json', 'report_manifest.json'),
     'FINALIZING': ('mission_baseline.json', 'provider_attempts.json', 'evidence.json', 'metrics.json',
                    'hypothesis_assessment.json', 'evaluation_result.json', 'thesis_revision.json',
                    'committee_verification.json', 'report.md', 'report.html', 'mission.json',
-                   'final_verification.json'),
+                   'final_verification.json', 'report_content.json', 'report_manifest.json'),
 }
 FAIL_POINTS = ('before_admission', 'after_admission', 'after_artifact_write', 'after_state_commit',
                'during_render', 'during_final_verify')
@@ -441,65 +443,32 @@ def op_verify(ctx: Ctx) -> dict[str, bytes]:
     return {'verification.json': _j(out)}
 
 
-def _table(headers, rows):
-    head = '| ' + ' | '.join(headers) + ' |\n|' + '---|' * len(headers) + '\n'
-    return head + ''.join('| ' + ' | '.join(str(c).replace('|', '\\|').replace('\n', ' ') for c in r) + ' |\n' for r in rows)
-
-
 def op_render(ctx: Ctx) -> dict[str, bytes]:
+    """RENDERING delegates to the evidence-bound composer (research_lab.reporting); authored interpretation and
+    chart specifications arrive only through the pinned ``inputs.report_input`` file."""
     spec = ctx.spec
     reconciliation, analysis = ctx.up('RECONCILING', 'reconciliation.json'), ctx.up('ANALYZING', 'analysis.json')
     acquisition, verification = ctx.up('ACQUIRING', 'acquisition.json'), ctx.up('VERIFYING', 'verification.json')
     ctx.fail_at('during_render')
-    state = analysis['research_state']
-    grade = 'OBSERVATIONS_ONLY_NOT_A_TRADE_SIGNAL' if state == 'EVALUABLE' else 'INSUFFICIENT_EVIDENCE / NO_TRADE'
-    obs = reconciliation['observations']
-    ev_rows = [[i, obs[i]['instrument_id'], obs[i]['metric'], obs[i]['value'], obs[i]['unit'], obs[i]['observed_at_utc'],
-                obs[i]['available_at_utc'], obs[i]['retrieved_at_utc'], obs[i]['source_uri']]
-               for i in reconciliation['eligible_observation_ids']]
-    ex_rows = [[e['id'], e['code']] for e in reconciliation['excluded']]
-    hyp_rows = [[h['hypothesis_id'], h['conclusion'], ', '.join(h['missing_evidence']) or '-'] for h in analysis['hypotheses']]
-    att_rows = [[a['operation_id'], a['status'], a.get('source', ''), a.get('reason', a.get('error', ''))] for a in acquisition['attempts']]
-    rev_rows = [[n, r['state'], r.get('reason', '')] for n, r in sorted(verification['reviews'].items())]
-    gaps = [f"{m['instrument_id']} / {m['metric']}: no eligible observation" for m in reconciliation['missing_required']]
-    gaps += [f"conflict ({c['kind']}) {c['instrument_id']} / {c['metric']}: {', '.join(c['observation_ids'])}" for c in reconciliation['conflicts']]
-    EV = ['Observation', 'Instrument', 'Metric', 'Value', 'Unit', 'Observed UTC', 'Available UTC', 'Retrieved UTC', 'Source']
-    md = (f"# Research mission report: {ctx.mission_id}\n\n**As-of UTC:** {ctx.as_of}  \n**Research state:** `{state}`  \n"
-          f"**Research grade:** `{grade}`  \n**Spec digest:** `{spec_digest(spec)}`\n\n"
-          f"## Executive thesis\n\nNo thesis is authored by the coordinator. The mechanical result is research state `{state}`; "
-          "this is an evidence ledger, not a forecast, scenario analysis or trade recommendation.\n\n"
-          f"## Question and horizon\n\n{spec['decision_question']}  \nHorizon: {spec['research_horizon']}  \n"
-          f"Instruments: {', '.join(spec['instruments'])}\n\n"
-          f"## Evidence quality and freshness [R]\n\nMaximum permitted age: {spec['max_age_seconds']} s. Eligible observations:\n\n"
-          + _table(EV, ev_rows) + "\nExcluded observations:\n\n" + _table(['Observation', 'Reason'], ex_rows)
-          + f"\n## Hypotheses [D]\n\n" + (_table(['Hypothesis', 'Conclusion', 'Missing metrics'], hyp_rows) if hyp_rows
-                                          else f"None declared: {analysis['no_hypotheses_reason']}\n")
-          + "\n## Bullish and bearish interpretation, scenarios and invalidation [U]\n\nNot produced. These require an independently "
-            "authored report_editor / methodology_reviewer handoff; the coordinator does not invent them.\n\n"
-          "## Method and provider disclosure\n\nOperations: " + ', '.join(f'{op}@{ver}' for op, ver in STAGE_OPERATIONS.values())
-          + f". Network calls by the coordinator: {acquisition['network_calls_by_coordinator']}.\n\n"
-          + _table(['Operation', 'Status', 'Source', 'Note'], att_rows)
-          + "\n## Reviews (asserted, unauthenticated)\n\n" + _table(['Reviewer', 'State', 'Note'], rev_rows)
-          + "\n## Data gaps\n\n" + ('\n'.join('- ' + g for g in gaps) if gaps else '- none identified against the declared requirements') + '\n\n'
-          "## Limitations\n\n" + '\n'.join('- ' + x for x in analysis['limitations']) + '\n')
-    e = html.escape
-
-    def h_table(headers, rows):
-        return ('<table><thead><tr>' + ''.join(f'<th scope="col">{e(h)}</th>' for h in headers) + '</tr></thead><tbody>'
-                + ''.join('<tr>' + ''.join(f'<td>{e(str(c))}</td>' for c in r) + '</tr>' for r in rows) + '</tbody></table>')
-    page = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{e(ctx.mission_id)} research report</title><style>body{{font:16px/1.5 system-ui;margin:1rem auto;max-width:70rem;padding:0 1rem}}'
-            'table{border-collapse:collapse;display:block;overflow-x:auto}td,th{border:1px solid #888;padding:.3rem .5rem;text-align:left}</style></head><body>'
-            f'<h1>Research mission report: {e(ctx.mission_id)}</h1><p><b>As-of UTC:</b> {e(ctx.as_of)}<br><b>Research state:</b> <code>{e(state)}</code>'
-            f'<br><b>Research grade:</b> <code>{e(grade)}</code></p><h2>Evidence quality and freshness</h2>' + h_table(EV, ev_rows)
-            + '<h3>Excluded observations</h3>' + h_table(['Observation', 'Reason'], ex_rows) + '<h2>Hypotheses</h2>'
-            + (h_table(['Hypothesis', 'Conclusion', 'Missing metrics'], hyp_rows) if hyp_rows else f'<p>None declared: {e(str(analysis["no_hypotheses_reason"]))}</p>')
-            + '<h2>Interpretation, scenarios and invalidation</h2><p>Not produced: requires an independently authored handoff.</p>'
-            + '<h2>Provider operations</h2>' + h_table(['Operation', 'Status', 'Source', 'Note'], att_rows)
-            + '<h2>Reviews (asserted, unauthenticated)</h2>' + h_table(['Reviewer', 'State', 'Note'], rev_rows)
-            + '<h2>Data gaps</h2><ul>' + (''.join(f'<li>{e(g)}</li>' for g in gaps) or '<li>none identified against the declared requirements</li>')
-            + '</ul></body></html>\n')
-    return {'report.md': md.encode('utf-8'), 'report.html': page.encode('utf-8')}
+    ref = spec['inputs'].get('report_input')
+    authored = ctx.pinned_json(ref) if ref else None
+    context = {
+        'mission_id': ctx.mission_id, 'spec_digest': spec_digest(spec), 'as_of_utc': ctx.as_of,
+        'decision_question': spec['decision_question'], 'research_horizon': spec['research_horizon'],
+        'instruments': spec['instruments'], 'max_age_seconds': spec['max_age_seconds'],
+        'evidence_snapshot_id': acquisition['evidence_snapshot_id'], 'research_state': analysis['research_state'],
+        'hypotheses': analysis['hypotheses'], 'no_hypotheses_reason': analysis['no_hypotheses_reason'],
+        'limitations': analysis['limitations'], 'observations': reconciliation['observations'],
+        'eligible_observation_ids': reconciliation['eligible_observation_ids'], 'excluded': reconciliation['excluded'],
+        'conflicts': reconciliation['conflicts'], 'missing_required': reconciliation['missing_required'],
+        'attempts': acquisition['attempts'], 'reviews': verification['reviews'], 'experiment': analysis['experiment'],
+        'operations': [f'{op}@{ver}' for op, ver in STAGE_OPERATIONS.values()], 'network_calls': acquisition['network_calls_by_coordinator']}
+    try:
+        composed = reporting.compose_report(context, authored, report_input_digest=ref['sha256'] if ref else None)
+    except ReportError as exc:
+        raise OperationFailure(exc.code, exc.message) from exc
+    return {'report.md': composed['report.md'], 'report.html': composed['report.html'],
+            'report_content.json': composed['content'], 'report_manifest.json': composed['manifest']}
 
 
 def op_finalize(ctx: Ctx) -> dict[str, bytes]:
@@ -509,6 +478,12 @@ def op_finalize(ctx: Ctx) -> dict[str, bytes]:
     verification = json.loads(verification.decode('utf-8'))
     report_md = ctx.coordinator._read_output(ctx.mission_id, 'RENDERING', 'report.md')
     report_html = ctx.coordinator._read_output(ctx.mission_id, 'RENDERING', 'report.html')
+    companions = {n: ctx.coordinator._read_output(ctx.mission_id, 'RENDERING', n) for n in ('report_content.json', 'report_manifest.json')}
+    problems = reporting.verify_companions({**companions, 'report.md': report_md, 'report.html': report_html},
+                                           spec_digest=spec_digest(spec), mission_id=ctx.mission_id,
+                                           evidence_ids={r['id'] for r in verification['evidence_references']})
+    if problems:
+        raise OperationFailure('VERIFICATION_FAILED', 'report companions failed independent verification: ' + '; '.join(problems))
     remaining = []
     for name, review in sorted(verification['reviews'].items()):
         if review['state'] != 'PASS':
@@ -547,7 +522,9 @@ def op_finalize(ctx: Ctx) -> dict[str, bytes]:
         for name, data in blobs.items():
             (Path(scratch) / name).write_bytes(data)
         result = verify_bundle(Path(scratch), archive=ctx.archive_path)
+    result['report_companions'] = {'state': 'PASS', 'checked': ['report_content.json', 'report_manifest.json', 'report.md', 'report.html']}
     blobs['final_verification.json'] = _j(result)
+    blobs.update(companions)  # versioned companions travel with the bundle but are not part of research-mission.v2 artifacts
     return blobs
 
 
