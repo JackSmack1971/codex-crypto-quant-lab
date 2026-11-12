@@ -35,8 +35,35 @@ from .experiments import ExperimentPlan, evaluate_frozen, freeze_candidate
 from .validation import LabelWindow
 
 SCHEMA_VERSION = 'experiment-registration.v1'
+# Exposure lineage: same underlying dataset = same ``dataset_id`` OR same full-dataset digest (the caller-controlled
+# ``dataset_version`` is never evidence of a different dataset). Overlapping holdout hulls on one lineage are reuse.
+# Overlap with a *different* lineage cannot be proven independent from a local registry -> independence UNKNOWN.
+INDEPENDENCE = ('ESTABLISHED_LOCAL', 'UNKNOWN', 'LEGACY_UNQUALIFIED')
+# Additive response qualifiers (schema unchanged). ``independent_evaluation`` is kept for compatibility; it is True only
+# for ESTABLISHED_LOCAL + a single, non-recovered exposure, and even then it only means "no overlap was found against
+# holdouts recorded in THIS registry under the declared dataset identity". It is never proof of independent samples.
+INDEPENDENCE_SCOPE_LOCAL = 'LOCAL_REGISTRY_RELATIVE'
+INDEPENDENCE_SCOPE_NONE = 'NOT_ESTABLISHED'
+INDEPENDENCE_LIMITATIONS = [
+    'scope is local-registry-relative: no overlap was found against holdouts recorded in this registry under the declared '
+    'dataset_id and full-dataset digest; this is not proven statistical or dataset independence',
+    'shifted timestamps, a changed dataset_id, or an altered dataset digest on the same underlying data can defeat the locally '
+    'declared lineage; neither content equality nor inequality proves independent samples',
+    'data seen outside this registry (copied, inspected or used for earlier research) is invisible to it']
+INDEPENDENCE_LIMITATIONS_NOT_ESTABLISHED = [
+    'independence is NOT established (label UNKNOWN, LEGACY_UNQUALIFIED, PENDING_CLAIM, or the evaluation was recovered, '
+    'reused or exposed more than once); do not describe this holdout as independent']
+
+
+def _independence_scope(independent: bool) -> dict:
+    return {'independence_scope': INDEPENDENCE_SCOPE_LOCAL if independent else INDEPENDENCE_SCOPE_NONE,
+            'independence_limitations': list(INDEPENDENCE_LIMITATIONS if independent else INDEPENDENCE_LIMITATIONS_NOT_ESTABLISHED)}
+
+
 STATUSES = ('REGISTERED', 'EVALUATING', 'CONSUMED', 'INVALIDATED')
-LIMITATIONS = ['local registry: cannot prevent inspection or copying of the dataset outside this interface',
+LIMITATIONS = ['independence is relative to this local registry only: dataset equivalence is established from the registered '
+               'dataset_id and full-dataset digest, never proven; overlap with another dataset identity yields independence UNKNOWN',
+               'local registry: cannot prevent inspection or copying of the dataset outside this interface',
                'a valid registration process does not imply scientifically credible inference or a predictive edge',
                'fixed candidate streams only; no fitting, search or parameter optimisation is performed']
 SCHEMA = '''
@@ -49,7 +76,8 @@ CREATE TABLE IF NOT EXISTS experiments(
  evaluation_method TEXT NOT NULL, limitations_json TEXT NOT NULL, registered_utc TEXT NOT NULL,
  status TEXT NOT NULL, exposure_count INTEGER NOT NULL, recovered INTEGER NOT NULL DEFAULT 0,
  claim_token TEXT, claim_utc TEXT, result_json TEXT, result_digest TEXT, consumed_utc TEXT,
- invalidated_reason TEXT);
+ invalidated_reason TEXT,
+ holdout_from TEXT, holdout_to TEXT, independence TEXT);
 CREATE INDEX IF NOT EXISTS experiments_holdout ON experiments(holdout_key);
 CREATE TABLE IF NOT EXISTS claims(
  experiment_id TEXT NOT NULL, claim_no INTEGER NOT NULL, token TEXT NOT NULL, utc TEXT NOT NULL,
@@ -86,6 +114,19 @@ def holdout_key(windows: list[LabelWindow], plan: ExperimentPlan, dataset_id: st
                    'dataset_id': dataset_id, 'dataset_version': dataset_version})
 
 
+def _holdout_hull(windows: list[LabelWindow], plan: ExperimentPlan) -> tuple[str, str]:
+    """Normalised (UTC instant) hull of the holdout label intervals; fixed-width so text order == time order."""
+    ivs = [(_utc(w.start_utc), _utc(w.end_utc)) for w in windows[plan.holdout_start:]]
+    fmt = lambda d: (lambda u: f'{u.year:04d}' + u.strftime('-%m-%dT%H:%M:%S.%fZ'))(d.astimezone(timezone.utc))
+    return fmt(min(a for a, _ in ivs)), fmt(max(b for _, b in ivs))
+
+
+def _independence_label(row) -> str:
+    if row['independence']:
+        return row['independence']
+    return 'PENDING_CLAIM' if row['holdout_from'] else 'LEGACY_UNQUALIFIED'
+
+
 def _check_types(plan, windows, candidates) -> None:
     if not isinstance(plan, ExperimentPlan) or not isinstance(windows, list) or not all(isinstance(w, LabelWindow) for w in windows):
         raise RegistryError('EXPERIMENT_INVALID', 'plan must be ExperimentPlan and windows a list of LabelWindow')
@@ -110,6 +151,14 @@ class ExperimentRegistry:
         self.clock, self._fail = clock or _now, fail_at
         with self._db() as db:
             db.executescript(SCHEMA)
+            cols = {r['name'] for r in db.execute('PRAGMA table_info(experiments)')}
+            for col in ('holdout_from', 'holdout_to', 'independence'):  # additive, idempotent; legacy rows keep NULL = LEGACY_UNQUALIFIED
+                if col not in cols:
+                    try:
+                        db.execute(f'ALTER TABLE experiments ADD COLUMN {col} TEXT')
+                    except sqlite3.OperationalError as exc:
+                        if 'duplicate column' not in str(exc):  # a concurrent opener already added it
+                            raise
 
     @contextmanager
     def _db(self, *, immediate: bool = False):
@@ -164,6 +213,7 @@ class ExperimentRegistry:
         if not _validation_indices(plan, windows):
             raise RegistryError('EXPERIMENT_INVALID', 'no valid validation periods: this experiment could never be evaluated')
         key = holdout_key(windows, plan, dataset_id, dataset_version)
+        hull = _holdout_hull(windows, plan)
         starts_ends = [(_utc(w.start_utc), _utc(w.end_utc)) for w in windows]
         holdout = range(plan.holdout_start, n)
         for i in freeze['frozen']['train_indices']:
@@ -178,8 +228,8 @@ class ExperimentRegistry:
         registration_digest = digest(record)
         with self._db(immediate=True) as db:
             row = db.execute('SELECT registration_digest, status FROM experiments WHERE experiment_id=?', (plan.experiment_id,)).fetchone()
-            if row is None and self._exposed_elsewhere(db, key, plan.experiment_id):
-                raise RegistryError('HOLDOUT_ALREADY_EXPOSED', 'another experiment already exposed this holdout; a new id does not make it untouched')
+            if row is None:
+                self._guard_exposure(db, plan.experiment_id, key, hull, dataset_id, dataset_digest_hex)
             if row is not None:
                 if row['registration_digest'] != registration_digest:
                     raise RegistryError('EXPERIMENT_REGISTRATION_CONFLICT',
@@ -188,12 +238,13 @@ class ExperimentRegistry:
                         'freeze_digest': freeze['freeze_digest'], 'status': row['status']}
             db.execute('INSERT INTO experiments(experiment_id,schema_version,registration_digest,plan_json,frozen_json,freeze_digest,'
                        'selected,universe_json,dataset_id,dataset_version,dataset_digest,holdout_key,windows_digest,boundaries_json,costs_json,'
-                       'evaluation_method,limitations_json,registered_utc,status,exposure_count) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                       'evaluation_method,limitations_json,registered_utc,status,exposure_count,holdout_from,holdout_to) '
+                       'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                        (plan.experiment_id, SCHEMA_VERSION, registration_digest, json.dumps(asdict(plan), sort_keys=True),
                         json.dumps(freeze, sort_keys=True), freeze['freeze_digest'], freeze['frozen']['selected'],
                         json.dumps(record['universe']), dataset_id, dataset_version, dataset_digest_hex, key,
                         freeze['frozen']['windows_digest'], json.dumps(boundaries, sort_keys=True), json.dumps(record['costs'], sort_keys=True),
-                        evaluation_method, json.dumps(LIMITATIONS), self.clock(), 'REGISTERED', 0))
+                        evaluation_method, json.dumps(LIMITATIONS), self.clock(), 'REGISTERED', 0, hull[0], hull[1]))
         return {'experiment_id': plan.experiment_id, 'registration_digest': registration_digest, 'created': True,
                 'freeze_digest': freeze['freeze_digest'], 'status': 'REGISTERED'}
 
@@ -201,6 +252,29 @@ class ExperimentRegistry:
     def _exposed_elsewhere(db, key: str, experiment_id: str) -> bool:
         return db.execute("SELECT 1 FROM experiments WHERE holdout_key=? AND experiment_id!=? AND (status!='REGISTERED' OR exposure_count>0)",
                           (key, experiment_id)).fetchone() is not None
+
+    @classmethod
+    def _guard_exposure(cls, db, experiment_id: str, key: str, hull: tuple[str, str], dataset_id: str, dataset_digest_hex: str) -> str:
+        """Reject reuse of an exposed holdout lineage; return the independence classification for this experiment.
+
+        Runs inside a BEGIN IMMEDIATE transaction, so concurrent claims are serialised. INVALIDATED experiments
+        stay exposed: invalidation never restores an untouched holdout."""
+        if cls._exposed_elsewhere(db, key, experiment_id):
+            raise RegistryError('HOLDOUT_ALREADY_EXPOSED', 'another experiment already exposed this holdout; a new id does not make it untouched')
+        verdict = 'ESTABLISHED_LOCAL'
+        for r in db.execute("SELECT experiment_id,dataset_id,dataset_digest,holdout_from,holdout_to FROM experiments "
+                            "WHERE experiment_id!=? AND (status!='REGISTERED' OR exposure_count>0)", (experiment_id,)):
+            same_lineage = r['dataset_id'] == dataset_id or r['dataset_digest'] == dataset_digest_hex
+            if r['holdout_from'] is None:  # legacy exposure with no interval record: disjointness is unprovable on any lineage
+                verdict = 'UNKNOWN'
+                continue
+            if r['holdout_from'] <= hull[1] and hull[0] <= r['holdout_to']:
+                if same_lineage:
+                    raise RegistryError('HOLDOUT_ALREADY_EXPOSED',
+                                        f'holdout overlaps the exposed holdout of {r["experiment_id"]!r} on the same dataset lineage; '
+                                        'a new experiment id or dataset_version does not make it untouched')
+                verdict = 'UNKNOWN'  # overlapping time range under a different dataset identity: equivalence unprovable
+        return verdict
 
     # -- reads ------------------------------------------------------------------
     def _row(self, experiment_id: str, db=None) -> sqlite3.Row:
@@ -220,10 +294,13 @@ class ExperimentRegistry:
             row = self._row(experiment_id)
         except RegistryError:
             return {'experiment_id': experiment_id, 'status': 'UNREGISTERED'}
+        independent = (row['status'] == 'CONSUMED' and row['exposure_count'] == 1 and not row['recovered']
+                       and row['independence'] == 'ESTABLISHED_LOCAL')
         return {'experiment_id': experiment_id, 'status': row['status'], 'registration_digest': row['registration_digest'],
                 'freeze_digest': row['freeze_digest'], 'holdout_exposure_count': row['exposure_count'],
                 'holdout_untouched': row['status'] == 'REGISTERED' and row['exposure_count'] == 0,
-                'independent_evaluation': row['status'] == 'CONSUMED' and row['exposure_count'] == 1 and not row['recovered'],
+                'independent_evaluation': independent, **_independence_scope(independent),
+                'independence': _independence_label(row),
                 'recovered_after_interruption': bool(row['recovered']), 'result_digest': row['result_digest'],
                 'invalidated_reason': row['invalidated_reason'], 'limitations': json.loads(row['limitations_json'])}
 
@@ -285,11 +362,16 @@ class ExperimentRegistry:
             current = db.execute('SELECT status,exposure_count FROM experiments WHERE experiment_id=?', (experiment_id,)).fetchone()
             if current['status'] != 'REGISTERED':
                 raise RegistryError('HOLDOUT_CLAIM_LOST', f'holdout is {current["status"]}; another evaluator claimed it')
-            if self._exposed_elsewhere(db, row['holdout_key'], experiment_id):
-                raise RegistryError('HOLDOUT_ALREADY_EXPOSED', 'a different experiment already exposed this holdout')
+            if row['holdout_from'] is None:  # legacy row: recompute the hull from the verified request (windows digest-checked)
+                hull = _holdout_hull(windows, plan)
+            else:
+                hull = (row['holdout_from'], row['holdout_to'])
+            independence = self._guard_exposure(db, experiment_id, row['holdout_key'], hull, row['dataset_id'], row['dataset_digest'])
+            if row['independence'] is None and row['holdout_from'] is None:
+                independence = 'LEGACY_UNQUALIFIED'
             count = current['exposure_count'] + 1
-            db.execute('UPDATE experiments SET status=?,exposure_count=?,claim_token=?,claim_utc=? WHERE experiment_id=?',
-                       ('EVALUATING', count, token, now, experiment_id))
+            db.execute('UPDATE experiments SET status=?,exposure_count=?,claim_token=?,claim_utc=?,holdout_from=?,holdout_to=?,independence=? '
+                       'WHERE experiment_id=?', ('EVALUATING', count, token, now, hull[0], hull[1], independence, experiment_id))
             db.execute('INSERT INTO claims VALUES(?,?,?,?,?,NULL)', (experiment_id, count, token, now, 'EVALUATE'))
         self._point('after_claim', experiment_id)
         result = evaluate_frozen(frozen, plan, windows, candidates, registered_digest=row['freeze_digest'])
@@ -310,10 +392,11 @@ class ExperimentRegistry:
 
     @staticmethod
     def _outcome(row, result, *, reused: bool) -> dict:
-        independent = row['exposure_count'] == 1 and not row['recovered'] and not reused
-        return {'experiment_id': row['experiment_id'], 'status': row['status'], 'result': result, 'reused': reused,
-                'independent_evaluation': independent, 'holdout_exposure_count': row['exposure_count'],
-                'recovered_after_interruption': bool(row['recovered']), 'result_digest': row['result_digest'],
+        independent = (row['exposure_count'] == 1 and not row['recovered'] and not reused
+                       and row['independence'] == 'ESTABLISHED_LOCAL')
+        return {'independence': _independence_label(row), 'experiment_id': row['experiment_id'], 'status': row['status'], 'result': result, 'reused': reused,
+                'independent_evaluation': independent, **_independence_scope(independent),
+                'holdout_exposure_count': row['exposure_count'], 'recovered_after_interruption': bool(row['recovered']), 'result_digest': row['result_digest'],
                 'limitations': json.loads(row['limitations_json'])}
 
     def reconcile_evaluation(self, experiment_id: str, decision: str, *, plan: ExperimentPlan | None = None,

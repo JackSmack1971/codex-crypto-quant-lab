@@ -306,12 +306,14 @@ class HoldoutIntegrityTests(Base):
         third = ExperimentPlan('exp-3', train_end=4, holdout_start=9, embargo=0)
         self.assertEqual(self.code(lambda: self.register(plan=third)).code, 'HOLDOUT_ALREADY_EXPOSED')   # nor can a new id be registered
 
-    def test_different_holdout_period_or_dataset_is_a_different_holdout(self):
+    def test_overlapping_or_relabelled_holdouts_are_not_different_holdouts(self):
+        """Repair H1: every holdout is the dataset tail, so a shorter tail or a new dataset_version overlaps."""
         self.register()
         self.evaluate()
         later = ExperimentPlan('exp-4', train_end=6, holdout_start=10, embargo=0)
-        self.assertTrue(self.register(plan=later)['created'])
-        self.assertTrue(self.register(plan=ExperimentPlan('exp-5', 6, 9, 0), dataset_version='2027.01')['created'])
+        self.assertEqual(self.code(lambda: self.register(plan=later)).code, 'HOLDOUT_ALREADY_EXPOSED')
+        relabel = self.code(lambda: self.register(plan=ExperimentPlan('exp-5', 6, 9, 0), dataset_version='2027.01'))
+        self.assertEqual(relabel.code, 'HOLDOUT_ALREADY_EXPOSED')
 
     def test_holdout_values_are_bound_at_registration(self):
         self.register()

@@ -1,0 +1,77 @@
+{
+  "as_of_utc": "2026-01-01T12:00:00Z",
+  "case_id": "B30",
+  "expected": {
+    "diagnostics": {
+      "codes_absent": [
+        "VERIFICATION_FAILED",
+        "STAGE_OUTPUT_MISSING",
+        "OPERATION_ERROR",
+        "RENDER_V1_OUTPUT_INVALID"
+      ]
+    },
+    "process": {
+      "completion_state": "COMPLETE",
+      "job_state": "COMPLETED",
+      "research_state": "NOT_EVALUABLE",
+      "stage": "FINALIZING"
+    },
+    "recovery": {
+      "legacy_render_detected": true,
+      "render_contract": "ABSENT_DECLARED_V1"
+    }
+  },
+  "fixtures": [
+    {
+      "dest": "inputs/B30/run.json",
+      "sha256": "f2dd63dd2e92796c5bb4d779d2f5c78f7342400a67f754ef54a6e2baf341b900",
+      "source": "benchmarks/fixtures/B30/run.json"
+    },
+    {
+      "dest": "inputs/B30/methodology_reviewer.json",
+      "sha256": "571b747a8f6d68d44956ee7677a85c2f3f9d353b320799ec884ccee11ff356b6",
+      "source": "benchmarks/fixtures/B30/methodology_reviewer.json"
+    },
+    {
+      "dest": "inputs/B30/source_verifier.json",
+      "sha256": "7c38848fb2991f0044d46a7be1bca5768e298f65d08a378b3c60a1c44c4f10e3",
+      "source": "benchmarks/fixtures/B30/source_verifier.json"
+    },
+    {
+      "dest": "inputs/B30/report_input.json",
+      "sha256": "84238b343146c81ab625c1550abdaa368650f36e87ac2aff3fea9905628d0e1b",
+      "source": "benchmarks/fixtures/B30/report_input.json"
+    },
+    {
+      "dest": "inputs/B30/spec.json",
+      "sha256": "e52d1befceda7231c634a1e899913e10074e86e6b1e3a76db21dfb31cfdf2493",
+      "source": "benchmarks/fixtures/B30/spec.json"
+    }
+  ],
+  "harness": "mission",
+  "limitations": [
+    "fixture is synthetic and offline; not live market evidence",
+    "reviewer handoffs are unauthenticated assertions",
+    "engineering correctness only; no predictive claim"
+  ],
+  "scenario": {
+    "spec": "inputs/B30/spec.json",
+    "steps": [
+      {
+        "op": "render_v1"
+      },
+      {
+        "op": "run_to_end"
+      }
+    ]
+  },
+  "schema": "research-benchmark-case.v1",
+  "title": "Mission rendered under render.local_report@1 finalizes under its declared contract",
+  "unsupported_claims": [
+    "predictive edge",
+    "profitability",
+    "live provider reliability",
+    "VALIDATED research state"
+  ],
+  "version": "1"
+}

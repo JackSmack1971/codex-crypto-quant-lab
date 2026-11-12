@@ -374,7 +374,7 @@ class CliTests(Base):
         cmd = [sys.executable, str(ROOT / 'scripts' / 'verify_mission.py'), str(self.root)]
         bare = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(bare.returncode, 1)
-        ok = subprocess.run(cmd + ['--archive', str(self.archive_path)], capture_output=True, text=True)
+        ok = subprocess.run(cmd + ['--archive', str(self.archive_path), '--allow-partial'], capture_output=True, text=True)
         self.assertEqual(ok.returncode, 0, ok.stdout)
         self.assertEqual(json.loads(ok.stdout)['layers']['source_provenance']['state'], 'ARCHIVE_RESOLVED')
 

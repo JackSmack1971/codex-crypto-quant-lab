@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from . import charts, history, reporting
+from . import benchmark_mutations as _mut
 from .archive import EvidenceArchive
 from .core import ContractError, digest
 from .experiment_registry import ExperimentRegistry, RegistryError, dataset_digest
@@ -131,6 +132,7 @@ class _Observed:
         self.artifact_hashes: dict[str, str] = {}
         self.recovery: dict = {}
         self.attempts: dict[str, int] = {}
+        self.companions: dict[str, str] = {}
 
 
 def _read(c: MissionCoordinator, mission_id: str, stage: str, name: str):
@@ -254,9 +256,17 @@ def _step_mission(c_factory, mission_id: str, ws: Path, spec: dict, obs: _Observ
             obs.final_stage = result['stage'] or obs.final_stage
         elif op == 'concurrent_advance':
             _concurrent(c_factory, mission_id, step['stage'], obs)
+        elif op == 'render_v1':
+            _mut.render_under_v1(c, mission_id)
+            obs.recovery['legacy_render_detected'] = c.render_is_legacy(mission_id)
+        elif op == 'forge_companion':
+            _mut.forge_companion(c, ws, spec, step, obs.companions)
         else:
             raise BenchmarkError('CASE_SCHEMA_INVALID', f'unknown step {op!r}')
     _gather(c, ws, spec, obs)
+    if any(s['op'] == 'render_v1' for s in steps) and (c.inspect_mission(mission_id)['final'] or {}).get('bundle_dir'):
+        bundle = ws / c.inspect_mission(mission_id)['final']['bundle_dir']
+        obs.recovery['render_contract'] = reporting.verify_bundle_companions(bundle, ws / spec['output_dir'] / 'evidence.sqlite')['status']
     stage_rows = c.inspect_mission(mission_id)['stages']
     if obs.recovery:
         obs.recovery['final_job_state'] = obs.job_state
@@ -355,9 +365,12 @@ def _eval_evidence(exp, obs: _Observed):
     dangling = []
     if obs.report:
         dangling = sorted(set(obs.report['referenced_evidence_ids']) - obs.archive_ids)
-    bad = unresolved or wrongly or dangling
+    companion_diff = {k: {'expected': v, 'observed': obs.companions.get(k)} for k, v in exp.get('companions', {}).items()
+                      if obs.companions.get(k) != v}
+    bad = unresolved or wrongly or dangling or companion_diff
     return _chk('evidence_reference_resolution', 'FAIL' if bad else 'PASS',
-                differences={k: v for k, v in (('unresolved', unresolved), ('must_not_resolve_but_resolved', wrongly), ('report_dangling', dangling)) if v})
+                differences={k: v for k, v in (('unresolved', unresolved), ('must_not_resolve_but_resolved', wrongly), ('report_dangling', dangling),
+                                                                                     ('companions', companion_diff)) if v})
 
 
 def _eval_quant(exp, obs: _Observed):
@@ -507,12 +520,14 @@ def _registry_case(case: dict, root: Path, ws: Path) -> tuple[list[dict], dict]:
                 observed['evaluate_status'] = res['status']
             elif op == 'register_expect_error':
                 plan = ExperimentPlan(**{**data['plan'], **step['plan_override']})
-                register(plan)
-                observed['second_registration'] = 'ACCEPTED'
+                reg.register(plan, windows, {k: v[:plan.train_end] for k, v in candidates.items()},
+                             dataset_id=step.get('dataset_id', data['dataset_id']), dataset_version=step.get('dataset_version', data['dataset_version']),
+                             evaluation_method=data['evaluation_method'], dataset_digest_hex=digest_hex)
+                observed[step.get('label', 'second_registration')] = 'ACCEPTED'
             else:
                 raise BenchmarkError('CASE_SCHEMA_INVALID', f'unknown step {op!r}')
         except RegistryError as exc:
-            observed['error_' + op] = exc.code
+            observed['error_' + step.get('label', op)] = exc.code
     summary = reg.summary(data['plan']['experiment_id'])
     observed.update(status=summary['status'], independent_evaluation=summary.get('independent_evaluation'),
                     holdout_exposure_count=summary.get('holdout_exposure_count'), holdout_untouched=summary.get('holdout_untouched'),

@@ -16,7 +16,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .charts import CHART_RENDERER_VERSION, ChartError, build_chart, chart_html, chart_markdown, md_escape, venue_of
-from .core import ContractError, _utc, canonical_json, digest
+from .core import ContractError, _utc, canonical_json, digest, instant_key
 
 INPUT_SCHEMA = 'research-intelligence-report.v1'
 CONTENT_SCHEMA = 'research-report-content.v1'
@@ -80,6 +80,11 @@ def _retrieved_claim(o: dict, as_of: str, max_age: int) -> dict:
             'limitations': ['provider measurement as archived; not independently re-verified by the report layer']}
 
 
+def _latest(stamps: list[str]) -> str:
+    """Latest instant by value; ties between spellings resolve by text so the result never depends on input order."""
+    return max(stamps, key=lambda t: (instant_key(t), t))
+
+
 def _derive(item: Any, observations: dict[str, dict], eligible: set[str], as_of: str, max_age: int, taken: set[str]) -> dict:
     if not isinstance(item, dict) or not {'claim_id', 'transform', 'input_evidence_ids'} <= set(item) \
             or set(item) - {'claim_id', 'transform', 'input_evidence_ids', 'expected_value', 'description'}:
@@ -124,16 +129,16 @@ def _derive(item: Any, observations: dict[str, dict], eligible: set[str], as_of:
     try:
         if kind == 'difference':
             a, b = sorted(rows, key=lambda r: _utc(r[0]['observed_at_utc']))
-            if a[0]['observed_at_utc'] == b[0]['observed_at_utc']:
+            if _utc(a[0]['observed_at_utc']) == _utc(b[0]['observed_at_utc']):
                 raise ReportError('DERIVED_INPUT_INVALID', 'inputs share one observation time')
             result, unit = b[1] - a[1], first['unit']
         elif kind == 'pct_change':
             a, b = sorted(rows, key=lambda r: _utc(r[0]['observed_at_utc']))
-            if a[0]['observed_at_utc'] == b[0]['observed_at_utc']:
+            if _utc(a[0]['observed_at_utc']) == _utc(b[0]['observed_at_utc']):
                 raise ReportError('DERIVED_INPUT_INVALID', 'inputs share one observation time')
             result, unit = Decimal(100) * (b[1] - a[1]) / abs(a[1]), 'percent'  # abs(): a rise from a negative base is positive
         elif kind == 'ratio':
-            if rows[0][0]['observed_at_utc'] != rows[1][0]['observed_at_utc']:
+            if _utc(rows[0][0]['observed_at_utc']) != _utc(rows[1][0]['observed_at_utc']):
                 raise ReportError('DERIVED_TIME_MISALIGNED', 'ratio inputs must share one observation time')
             result, unit = rows[0][1] / rows[1][1], f"{rows[0][0]['unit']}/{rows[1][0]['unit']}"
         else:
@@ -149,8 +154,8 @@ def _derive(item: Any, observations: dict[str, dict], eligible: set[str], as_of:
     age = (_utc(as_of) - oldest).total_seconds()
     return {'claim_id': cid, 'classification': 'D', 'metric': first['metric'] if kind != 'ratio' else f"{rows[0][0]['metric']}/{rows[1][0]['metric']}",
             'instrument_id': first['instrument_id'], 'venue': venue_of(first['instrument_id']), 'value': _fmt(result), 'unit': unit,
-            'observed_at_utc': max(o['observed_at_utc'] for o, _ in rows), 'retrieved_at_utc': max(o['retrieved_at_utc'] for o, _ in rows),
-            'available_at_utc': max(o['available_at_utc'] for o, _ in rows), 'evidence_ids': sorted(ids),
+            'observed_at_utc': _latest([o['observed_at_utc'] for o, _ in rows]), 'retrieved_at_utc': _latest([o['retrieved_at_utc'] for o, _ in rows]),
+            'available_at_utc': _latest([o['available_at_utc'] for o, _ in rows]), 'evidence_ids': sorted(ids),
             'transform': ({'id': kind, 'version': TRANSFORM_IDS[kind], 'numerator_id': ids[0], 'denominator_id': ids[1]} if kind == 'ratio'
                           else {'id': kind, 'version': TRANSFORM_IDS[kind]}), 'source': sorted({o['source_uri'] for o, _ in rows}),
             'freshness': {'status': _freshness(age, max_age), 'age_seconds': int(age), 'max_age_seconds': max_age},
@@ -284,7 +289,7 @@ def compose_report(context: dict, authored: Any, *, report_input_digest: str | N
             raise ReportError('CORROBORATION_NOT_INDEPENDENT', 'corroboration needs two or more eligible evidence ids')
         if item['id'] in {c['id'] for c in corroborations}:
             raise ReportError('REPORT_INPUT_INVALID', f'duplicate corroboration id {item["id"]!r}')
-        if len({(observations[x]['instrument_id'], observations[x]['metric'], observations[x]['unit'], observations[x]['observed_at_utc']) for x in ids}) != 1:
+        if len({(observations[x]['instrument_id'], observations[x]['metric'], observations[x]['unit'], instant_key(observations[x]['observed_at_utc'])) for x in ids}) != 1:
             raise ReportError('CORROBORATION_NOT_INDEPENDENT', 'corroborating evidence must measure one instrument, metric, unit and observation time')
         families = [_source_family(observations[x]['source_uri']) for x in ids]
         if len(set(families)) != len(families):
@@ -386,6 +391,194 @@ def verify_companions(files: dict[str, bytes], *, spec_digest: str, mission_id: 
         if claim['classification'] == 'U' and claim.get('value') is not None:
             problems.append(f"unavailable claim {claim['claim_id']} carries a value")
     return problems
+
+
+_UNSET = object()
+SEMANTIC_VERIFIER_VERSION = '1'
+
+
+def verify_companion_semantics(files: dict[str, bytes], *, spec_digest: str, mission_id: str, observations: dict[str, dict],
+                               eligible: set[str], as_of: str, max_age: int | None = None,
+                               evidence_snapshot_id: Any = _UNSET, report_input_digest: Any = _UNSET) -> list[str]:
+    """Semantic verification of the RENDERING companions against *archived observations*, not merely against each
+    other. A recomputed manifest hash is local-writer self-consistency; this function re-derives every [R] claim from
+    its archived observation and every [D] claim from its declared transform and archived inputs, and binds the
+    companions to the mission (id, spec digest, as-of, evidence snapshot, pinned report input).
+
+    ``observations`` maps id -> archived observation fields; ``eligible`` is the verified evidence reference set.
+    Returns problem strings (empty = semantically verified). Not covered: rendered chart tables and the prose of
+    report.md/html beyond the presence of each recorded claim value (those remain hash-bound only)."""
+    import json
+    problems = verify_companions(files, spec_digest=spec_digest, mission_id=mission_id, evidence_ids=set(eligible))
+    try:
+        manifest, content = json.loads(files['report_manifest.json']), json.loads(files['report_content.json'])
+    except (KeyError, ValueError, UnicodeError):
+        return problems or ['report companions are missing or not valid JSON']
+    if not isinstance(content, dict) or not isinstance(manifest, dict) or not isinstance(content.get('claims'), list):
+        return problems + ['companion structure is malformed']
+    if content.get('as_of_utc') != as_of or manifest.get('as_of_utc') != as_of:
+        problems.append('companion as-of differs from the mission as-of')
+    if evidence_snapshot_id is not _UNSET and (content.get('evidence_snapshot_id') != evidence_snapshot_id
+                                               or manifest.get('evidence_snapshot_id') != evidence_snapshot_id):
+        problems.append('companion evidence snapshot differs from the mission evidence snapshot')
+    if report_input_digest is not _UNSET and manifest.get('report_input_digest') != report_input_digest:
+        problems.append('companion report-input digest differs from the pinned mission input')
+    age_limit = content.get('max_age_seconds') if max_age is None else max_age
+    if max_age is not None and content.get('max_age_seconds') != max_age:
+        problems.append('companion max_age_seconds differs from the mission spec')
+    if isinstance(age_limit, bool) or not isinstance(age_limit, int):
+        return problems + ['companion max_age_seconds is not an integer']
+    try:
+        as_of_ok = _utc(as_of) is not None
+    except ContractError:
+        as_of_ok = False
+    if not as_of_ok:
+        return problems + ['mission as-of is not a valid UTC timestamp']
+    md = files.get('report.md', b'').decode('utf-8', 'replace')
+    page = files.get('report.html', b'').decode('utf-8', 'replace')
+    seen_r: set[str] = set()
+    for claim in content['claims']:
+        if not isinstance(claim, dict):
+            problems.append('a claim is not an object')
+            continue
+        cid, kind = claim.get('claim_id'), claim.get('classification')
+        if kind == 'R':
+            oid = cid[2:] if isinstance(cid, str) and cid.startswith('R:') else None
+            seen_r.add(oid)
+            if oid is None or oid not in observations:
+                problems.append(f'{cid}: archived observation is missing')
+                continue
+            if oid not in eligible:
+                problems.append(f'{cid}: observation is not part of the verified eligible evidence')
+                continue
+            o = observations[oid]
+            if o.get('status', 'OBSERVED') != 'OBSERVED' or o.get('value') is None or o.get('observed_at_utc') is None:
+                problems.append(f'{cid}: archived observation is not an OBSERVED value')
+                continue
+            try:
+                expected = _retrieved_claim(o, as_of, age_limit)
+            except (ContractError, KeyError, TypeError) as exc:
+                problems.append(f'{cid}: archived observation is unusable ({type(exc).__name__})')
+                continue
+            diff = sorted(k for k in set(expected) | set(claim) if expected.get(k) != claim.get(k))
+            if diff:
+                problems.append(f'{cid}: differs from the archived observation in {", ".join(diff)}')
+        elif kind == 'D':
+            transform = claim.get('transform')
+            if not isinstance(transform, dict) or transform.get('id') not in TRANSFORM_IDS \
+                    or transform.get('version') != TRANSFORM_IDS.get(transform.get('id')) or not isinstance(cid, str) or not cid.startswith('D:'):
+                problems.append(f'{cid}: declared transform is unknown or has the wrong version')
+                continue
+            ids = claim.get('evidence_ids')
+            if transform['id'] == 'ratio':
+                ids = [transform.get('numerator_id'), transform.get('denominator_id')]
+            try:
+                recomputed = _derive({'claim_id': cid[2:], 'transform': transform['id'], 'input_evidence_ids': list(ids)},
+                                     observations, set(eligible), as_of, age_limit, set())
+            except (ReportError, TypeError) as exc:
+                problems.append(f'{cid}: cannot be recomputed from archived inputs ({getattr(exc, "code", type(exc).__name__)})')
+                continue
+            diff = sorted(k for k in set(recomputed) | set(claim) if recomputed.get(k) != claim.get(k))
+            if diff:
+                problems.append(f'{cid}: differs from recomputation in {", ".join(diff)}')
+        elif kind == 'U':
+            continue
+        else:
+            problems.append(f'{cid}: unknown claim classification {kind!r}')
+            continue
+        if kind in ('R', 'D') and isinstance(claim.get('value'), str):
+            if md and md_escape(claim['value']) not in md:
+                problems.append(f'{cid}: recorded value is absent from report.md')
+            if page and _html_escape(claim['value']) not in page:
+                problems.append(f'{cid}: recorded value is absent from report.html')
+    expected_r = {oid for oid in eligible}
+    if seen_r != expected_r:
+        problems.append('[R] claims do not match the verified eligible evidence (missing: %s; extra: %s)'
+                        % (sorted(expected_r - seen_r), sorted(x for x in seen_r - expected_r if x is not None)))
+    cited = sorted({e for c in content['claims'] if isinstance(c, dict) for e in (c.get('evidence_ids') or [])})
+    if content.get('referenced_evidence_ids') != cited:
+        problems.append('referenced_evidence_ids does not equal the evidence cited by the claims')
+    for chart in content.get('charts', []):
+        if isinstance(chart, dict) and chart.get('status') == 'AVAILABLE':
+            bad = [x for x in chart.get('observation_ids', []) if x not in eligible or x not in observations]
+            if bad:
+                problems.append(f'chart {chart.get("chart_id")}: cites observations outside the verified evidence ({bad})')
+    return problems
+
+
+LEGACY_RENDER_CONTRACT = 'render.local_report@1'
+COMPANION_FILES = ('report_content.json', 'report_manifest.json', 'report.md', 'report.html')
+
+
+def verify_bundle_companions(root: Any, archive: Any = None) -> dict:
+    """Single bundle-level companion verdict shared by finalization, ``scripts/verify_mission.py`` and history.
+
+    status: ``SEMANTICALLY_VERIFIED`` (every [R]/[D] claim re-derived from the archive) | ``NOT_VERIFIED_NO_ARCHIVE``
+    (hash/binding consistency only) | ``ABSENT_DECLARED_V1`` (baseline declares a render@1 legacy mission; no companions
+    expected) | ``ABSENT_UNATTESTED_LEGACY`` (no companions and no declaration: a pre-P2 bundle OR a stripped one;
+    nothing report-derived may be trusted) | ``FAILED``. Hashes and manifests written by the same local writer are
+    never treated as authentication."""
+    import json
+    from dataclasses import asdict
+    from pathlib import Path
+    from .archive import ArchiveDatabaseError, ArchiveIntegrityError, EvidenceArchive, EvidenceMissing
+    root = Path(root)
+
+    def load(name):
+        try:
+            return json.loads((root / name).read_text(encoding='utf-8'))
+        except (OSError, ValueError, UnicodeError):
+            return None
+    baseline, evidence = load('mission_baseline.json'), load('evidence.json')
+    declared_legacy = isinstance(baseline, dict) and baseline.get('render_contract') == LEGACY_RENDER_CONTRACT
+    present = [n for n in COMPANION_FILES[:2] if (root / n).exists()]
+    if not present:
+        final = load('final_verification.json')
+        attested = isinstance(final, dict) and isinstance(final.get('report_companions'), dict) and \
+            (final['report_companions'].get('checked') or final['report_companions'].get('verdict') == 'SEMANTICALLY_VERIFIED')
+        if attested and not declared_legacy:   # the finalized bundle says companions were verified; they were removed afterwards
+            return {'status': 'FAILED', 'problems': ['final_verification attests report companions that are no longer present']}
+        return {'status': 'ABSENT_DECLARED_V1' if declared_legacy else 'ABSENT_UNATTESTED_LEGACY', 'problems': []}
+    if declared_legacy:
+        return {'status': 'FAILED', 'problems': ['baseline declares render.local_report@1 yet report companions exist']}
+    if not isinstance(baseline, dict) or not isinstance(evidence, dict) or not isinstance(evidence.get('references'), list):
+        return {'status': 'FAILED', 'problems': ['baseline or evidence references are unreadable']}
+    files = {}
+    for name in COMPANION_FILES:
+        try:
+            files[name] = (root / name).read_bytes()
+        except OSError:
+            pass
+    if len(files) != 4:
+        return {'status': 'FAILED', 'problems': ['report companions or reports are missing']}
+    ev_ids = {r['id'] for r in evidence['references'] if isinstance(r, dict) and isinstance(r.get('id'), str)}
+    try:
+        return _bundle_verdict(files, baseline, ev_ids, archive)
+    except (TypeError, KeyError, AttributeError, ValueError) as exc:  # malformed companion structure fails closed
+        return {'status': 'FAILED', 'problems': [f'companions are structurally malformed ({type(exc).__name__})']}
+
+
+def _bundle_verdict(files: dict, baseline: dict, ev_ids: set, archive: Any) -> dict:
+    import json  # noqa: F401
+    from dataclasses import asdict
+    from pathlib import Path
+    from .archive import ArchiveDatabaseError, ArchiveIntegrityError, EvidenceArchive, EvidenceMissing
+    if archive is None or not Path(archive).exists():
+        problems = verify_companions(files, spec_digest=baseline.get('spec_digest'), mission_id=baseline.get('run_id'), evidence_ids=ev_ids)
+        return {'status': 'FAILED' if problems else 'NOT_VERIFIED_NO_ARCHIVE', 'problems': problems}
+    observations = {}
+    try:
+        store = EvidenceArchive(archive)
+        for oid in sorted(ev_ids):
+            try:
+                observations[oid] = asdict(store.get(oid))
+            except (EvidenceMissing, ArchiveIntegrityError, ArchiveDatabaseError):
+                pass  # unresolved evidence is reported by the verifier as missing
+    except Exception:  # noqa: BLE001 - an unreadable archive means nothing can be re-derived
+        observations = {}
+    problems = verify_companion_semantics(files, spec_digest=baseline.get('spec_digest'), mission_id=baseline.get('run_id'),
+                                          observations=observations, eligible=ev_ids, as_of=baseline.get('as_of_utc'))
+    return {'status': 'FAILED' if problems else 'SEMANTICALLY_VERIFIED', 'problems': problems}
 
 
 # --------------------------------------------------------------------------------- rendering

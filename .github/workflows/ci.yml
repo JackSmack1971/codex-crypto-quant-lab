@@ -30,7 +30,7 @@ jobs:
       - name: Syntax and import checks
         run: |
           python -m compileall -q quant_free_mcp research_lab scripts src tests
-          python -c "import quant_free_mcp.core, quant_free_mcp.acquisition, quant_free_mcp.adapters, quant_free_mcp.math, research_lab.completion, research_lab.mission_integrity, research_lab.provider_policy, research_lab.archive, research_lab.mission_spec, research_lab.mission_coordinator, research_lab.experiment_registry, research_lab.reporting, research_lab.charts, research_lab.history, research_lab.benchmarks"
+          python -c "import quant_free_mcp.core, quant_free_mcp.acquisition, quant_free_mcp.adapters, quant_free_mcp.math, research_lab.completion, research_lab.mission_integrity, research_lab.provider_policy, research_lab.archive, research_lab.mission_spec, research_lab.mission_coordinator, research_lab.experiment_registry, research_lab.reporting, research_lab.charts, research_lab.history, research_lab.benchmarks, research_lab.benchmark_mutations"
       - name: Dependency declaration check
         run: python scripts/check_dependencies.py
       - name: Core, reporting, research, mission-integrity and provider fault-injection tests
@@ -40,7 +40,7 @@ jobs:
                    test_acquisition test_research_lab test_research_expansion test_research_workflows \
                    test_research_v24 test_research_explorer_v24 test_p0_regressions \
                    test_mission_coordinator test_mission_recovery test_experiment_registry test_mission_e2e \
-                   test_report_composition test_charts test_history test_benchmarks; do
+                   test_report_composition test_charts test_history test_benchmarks test_corrective_repair test_qualification_hardening; do
             python -m unittest "tests.$t" -v
           done
           python scripts/benchmark.py --repeat 2
@@ -64,7 +64,7 @@ jobs:
         run: |
           python -m pip check
           python scripts/check_dependencies.py --installed
-      - name: Fixture mission bundle verifies
-        run: python scripts/verify_mission.py tests/fixtures/synthetic-mission-bundle
+      - name: Fixture mission bundle integrity (archive-less fixture: PARTIALLY_VERIFIED is expected; archive-backed exit 0 is gated in test_mission_e2e)
+        run: python scripts/verify_mission.py tests/fixtures/synthetic-mission-bundle --allow-partial
       - name: pytest (live provider tests are skipped unless QUANT_LIVE_TESTS=1)
         run: python -m pytest tests -q

@@ -1,6 +1,4 @@
 {
-  "schema": "research-benchmark-suite.v1",
-  "version": "1",
   "cases": [
     "B01",
     "B02",
@@ -26,7 +24,13 @@
     "B22",
     "B23",
     "B24",
-    "B25"
+    "B25",
+    "B26",
+    "B27",
+    "B28",
+    "B29",
+    "B30",
+    "B31"
   ],
   "mandatory_dimensions": [
     "process_state",
@@ -36,5 +40,7 @@
     "recovery_idempotency",
     "holdout_governance"
   ],
-  "scope": "engineering correctness, evidence discipline and recovery behaviour on deterministic offline fixtures; not profitability, alpha or predictive skill"
+  "schema": "research-benchmark-suite.v1",
+  "scope": "engineering correctness, evidence discipline and recovery behaviour on deterministic offline fixtures; not profitability, alpha or predictive skill",
+  "version": "1"
 }

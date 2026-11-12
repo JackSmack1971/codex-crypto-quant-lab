@@ -215,24 +215,44 @@ class ThesisHistory:
                             'diagnostic_codes': sorted({d['code'] for d in result['diagnostics']}), 'integrity_problem_codes': damaged}
         content = read('report_content.json', False)
         manifest = read('report_manifest.json', False)
-        if content is not None or manifest is not None:  # digest-consistency check of the companions (not recomputation)
-            files = {}
-            for name in ('report_content.json', 'report_manifest.json', 'report.md', 'report.html'):
-                try:
-                    files[name] = (root / name).read_bytes()
-                except OSError:
-                    pass
-            problems = reporting.verify_companions(
-                files, spec_digest=(manifest or {}).get('input_spec_digest') if isinstance(manifest, dict) else None,
-                mission_id=baseline.get('run_id'), evidence_ids={r['id'] for r in evidence['references'] if isinstance(r, dict) and 'id' in r}) \
-                if len(files) == 4 else ['report companions or reports are missing']
-            verification['companion_problems'] = problems
-            if problems:
-                verification['status'] = 'INVALID'
+        # Companion verdict is shared with finalization and scripts/verify_mission.py (reporting.verify_bundle_companions).
+        companions = reporting.verify_bundle_companions(root, archive)
+        verification['companions'] = companions
+        verification['companion_problems'] = companions['problems']
+        if companions['status'] == 'FAILED':
+            verification['status'] = 'INVALID'
         bundle_digest = digest({n: (root / n).read_bytes().hex() for n in ('mission.json', 'evidence.json', 'mission_baseline.json')})
         return {'root': root, 'mission': mission, 'baseline': baseline, 'evidence': evidence['references'], 'verification': verification,
                 'content': content if isinstance(content, dict) else None, 'manifest': manifest if isinstance(manifest, dict) else None,
                 'digest': bundle_digest}
+
+    @staticmethod
+    def _trust(bundle: dict) -> str:
+        """Fail-closed trust class of a loaded bundle, derived only from verification that was actually performed.
+
+        ``VERIFIED``: integrity checks passed AND every report [R]/[D] claim was re-derived from the archive.
+        ``LEGACY_UNVERIFIED``: integrity passed but the bundle has no report companions (a genuine pre-P2/render@1 bundle OR
+        a stripped one; the two cannot be told apart and neither is trusted). ``UNVERIFIED``: no archive was available, so
+        nothing was re-derived. ``INVALID``: integrity or semantic verification failed (tampered/inconsistent).
+        The contents of ``final_verification.json`` never raise a class: it is locally writable and is used only to
+        *downgrade* (a bundle attesting companions that vanished is FAILED -> INVALID)."""
+        v = bundle['verification']
+        if v['status'] == 'INVALID':
+            return 'INVALID'
+        if v['status'] not in ('COMPLETE', 'INCOMPLETE'):
+            return 'UNVERIFIED'
+        status = v.get('companions', {}).get('status')
+        if status == 'SEMANTICALLY_VERIFIED':
+            return 'VERIFIED'
+        if status in ('ABSENT_DECLARED_V1', 'ABSENT_UNATTESTED_LEGACY'):
+            return 'LEGACY_UNVERIFIED'
+        return 'UNVERIFIED'
+
+    @classmethod
+    def _trusted(cls, bundle: dict) -> bool:
+        """Report-derived content may be compared only for a VERIFIED bundle. Legacy companion-free bundles stay readable
+        (integrity-checked) but carry no trusted report-derived content, so no authoritative comparison is made from them."""
+        return cls._trust(bundle) == 'VERIFIED'
 
     def link_mission(self, revision_id: str, bundle_dir: Path | str, archive: Path | str | None = None) -> dict:
         """Check (never create) the relation between a stored thesis revision and a mission bundle."""
@@ -256,7 +276,8 @@ class ThesisHistory:
                             'state': revision['state'], 'cited_evidence_ids': sorted(cited)},
                 'mission': {'mission_id': bundle['baseline'].get('run_id'), 'research_as_of_utc': as_of,
                             'research_state': bundle['mission'].get('research_state'), 'completion_state': bundle['mission'].get('completion_state'),
-                            'evidence_ids': sorted(bundle_ids), 'bundle_digest': bundle['digest'], 'verification': bundle['verification']},
+                            'evidence_ids': sorted(bundle_ids), 'bundle_digest': bundle['digest'], 'verification': bundle['verification'],
+                            'bundle_trust': self._trust(bundle)},
                 'cited_but_absent_from_bundle': missing, 'validity': 'NOT_REASSESSED',
                 'note': 'a mission bundle is research-execution evidence; it does not create, change or validate a thesis revision',
                 'notice': NOTICE, 'service_version': SERVICE_VERSION}
@@ -271,6 +292,9 @@ class ThesisHistory:
 
     def _compare_missions(self, older, newer, archives) -> dict:
         a, b = self._load_bundle(older, archives[0]), self._load_bundle(newer, archives[1])
+        for label, bundle in (('older', a), ('newer', b)):
+            if bundle['verification']['status'] == 'INVALID':
+                raise HistoryError('BUNDLE_INVALID', f'the {label} bundle failed integrity or semantic evidence verification; it cannot be compared')
         ta, tb = a['baseline'].get('as_of_utc'), b['baseline'].get('as_of_utc')
         if not ta or not tb or _utc(ta) > _utc(tb):
             raise HistoryError('MISSION_ORDER_INVALID', 'the older mission must have the earlier research as-of')
@@ -292,7 +316,11 @@ class ThesisHistory:
             return latest
         ra, rb = claims(a), claims(b)
         metrics = []
-        if ra is None or rb is None:
+        if not (self._trusted(a) and self._trusted(b)):
+            # no change figure from evidence nobody verified; a legacy/stripped companion-free bundle is named distinctly
+            # from an unverifiable (no archive) one. INVALID bundles were already rejected above.
+            metrics_status = 'REFUSED_LEGACY_UNVERIFIED' if 'LEGACY_UNVERIFIED' in (self._trust(a), self._trust(b)) else 'REFUSED_UNVERIFIED_BUNDLE'
+        elif ra is None or rb is None:
             metrics_status = 'NOT_AVAILABLE'
         else:
             metrics_status = 'COMPARED'
@@ -311,7 +339,7 @@ class ThesisHistory:
                     metrics.append({'key': '|'.join(pair), 'status': 'NON_COMPARABLE', 'reasons': ['unit differs between missions']})
 
         def listed(bundle, field):
-            if not bundle['content']:
+            if not bundle['content'] or not self._trusted(bundle):
                 return None
             if field == 'falsifiers':
                 return sorted({f for s in bundle['content']['scenarios'] for f in s['falsifiers']})
@@ -322,12 +350,12 @@ class ThesisHistory:
         def delta(field):
             x, y = listed(a, field), listed(b, field)
             if x is None or y is None:
-                return {'status': 'NOT_AVAILABLE', 'reason': 'report companions absent from at least one bundle'}
+                return {'status': 'NOT_AVAILABLE', 'reason': 'report companions absent (legacy/stripped) or not semantically verified in at least one bundle'}
             return {'status': 'COMPARED', 'added': sorted(set(y) - set(x)), 'removed': sorted(set(x) - set(y))}
         result = {
             'schema': HISTORY_SCHEMA, 'kind': 'mission_comparison',
-            'sources': {'older': {'mission_id': a['baseline'].get('run_id'), 'research_as_of_utc': ta, 'bundle_digest': a['digest'], 'verification': a['verification']},
-                        'newer': {'mission_id': b['baseline'].get('run_id'), 'research_as_of_utc': tb, 'bundle_digest': b['digest'], 'verification': b['verification']}},
+            'sources': {'older': {'mission_id': a['baseline'].get('run_id'), 'research_as_of_utc': ta, 'bundle_digest': a['digest'], 'verification': a['verification'], 'bundle_trust': self._trust(a)},
+                        'newer': {'mission_id': b['baseline'].get('run_id'), 'research_as_of_utc': tb, 'bundle_digest': b['digest'], 'verification': b['verification'], 'bundle_trust': self._trust(b)}},
             'same_decision_question': a['baseline'].get('decision_question') == b['baseline'].get('decision_question'),
             'research_state': {'older': a['mission'].get('research_state'), 'newer': b['mission'].get('research_state')},
             'completion_state': {'older': a['mission'].get('completion_state'), 'newer': b['mission'].get('completion_state')},

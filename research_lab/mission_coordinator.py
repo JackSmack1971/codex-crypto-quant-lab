@@ -38,7 +38,7 @@ from typing import Any, Callable
 from . import mission_integrity as integrity
 from .archive import ArchiveDatabaseError, ArchiveIntegrityError, EvidenceArchive, EvidenceMissing
 from .completion import verify as verify_bundle
-from .core import ContractError, Observation, ResearchSignal, digest, evaluate_hypothesis, _utc
+from .core import ContractError, Observation, ResearchSignal, digest, evaluate_hypothesis, _utc, instant_key
 from .evals import evaluate_task
 from .jobs import JobStore
 from . import reporting
@@ -63,6 +63,9 @@ STAGE_OUTPUTS = {
                    'committee_verification.json', 'report.md', 'report.html', 'mission.json',
                    'final_verification.json', 'report_content.json', 'report_manifest.json'),
 }
+LEGACY_RENDER_VERSION = '1'                       # render.local_report@1 (P1); current is STAGE_OPERATIONS['RENDERING']
+LEGACY_RENDER_OUTPUTS = ('report.md', 'report.html')
+COMPANION_OUTPUTS = ('report_content.json', 'report_manifest.json')
 FAIL_POINTS = ('before_admission', 'after_admission', 'after_artifact_write', 'after_state_commit',
                'during_render', 'during_final_verify')
 SCHEMA_STORE = '''
@@ -298,6 +301,8 @@ def op_reconcile(ctx: Ctx) -> dict[str, bytes]:
             excluded[o.id] = 'OUT_OF_SCOPE_INSTRUMENT'
         elif any(_utc(t) > cutoff for t in (o.observed_at_utc, o.available_at_utc, o.retrieved_at_utc)):
             excluded[o.id] = 'FUTURE_DATED'
+        elif _utc(o.available_at_utc) < _utc(o.observed_at_utc):
+            excluded[o.id] = 'CHRONOLOGY_INVALID'  # a value cannot be available before it was observed
         elif (cutoff - _utc(o.observed_at_utc)).total_seconds() > spec['max_age_seconds']:
             excluded[o.id] = 'STALE'
         else:
@@ -321,8 +326,9 @@ def op_reconcile(ctx: Ctx) -> dict[str, bytes]:
         by_time: dict[str, list[Observation]] = {}
         for m in members:
             if m.id not in excluded:
-                by_time.setdefault(m.observed_at_utc, []).append(m)
-        for when, same in sorted(by_time.items()):
+                by_time.setdefault(instant_key(m.observed_at_utc), []).append(m)  # semantic instant, not spelling
+        for _instant, same in sorted(by_time.items()):
+            when = min(m.observed_at_utc for m in same)  # original spelling kept for provenance (unchanged for uniform input)
             values = [Decimal(m.value) for m in same]
             if max(values) - min(values) > tolerance:
                 for m in same:
@@ -478,12 +484,20 @@ def op_finalize(ctx: Ctx) -> dict[str, bytes]:
     verification = json.loads(verification.decode('utf-8'))
     report_md = ctx.coordinator._read_output(ctx.mission_id, 'RENDERING', 'report.md')
     report_html = ctx.coordinator._read_output(ctx.mission_id, 'RENDERING', 'report.html')
-    companions = {n: ctx.coordinator._read_output(ctx.mission_id, 'RENDERING', n) for n in ('report_content.json', 'report_manifest.json')}
-    problems = reporting.verify_companions({**companions, 'report.md': report_md, 'report.html': report_html},
-                                           spec_digest=spec_digest(spec), mission_id=ctx.mission_id,
-                                           evidence_ids={r['id'] for r in verification['evidence_references']})
-    if problems:
-        raise OperationFailure('VERIFICATION_FAILED', 'report companions failed independent verification: ' + '; '.join(problems))
+    legacy = ctx.coordinator.render_is_legacy(ctx.mission_id)
+    companions: dict[str, bytes] = {}
+    if not legacy:
+        companions = {n: ctx.coordinator._read_output(ctx.mission_id, 'RENDERING', n) for n in ('report_content.json', 'report_manifest.json')}
+        eligible_ids = {r['id'] for r in verification['evidence_references']}
+        archive = EvidenceArchive(ctx.archive_path)
+        observations = {oid: asdict(_archived(archive, oid)) for oid in sorted(eligible_ids)}
+        pinned = spec['inputs'].get('report_input')
+        problems = reporting.verify_companion_semantics(
+            {**companions, 'report.md': report_md, 'report.html': report_html}, spec_digest=spec_digest(spec), mission_id=ctx.mission_id,
+            observations=observations, eligible=eligible_ids, as_of=ctx.as_of, max_age=spec['max_age_seconds'],
+            evidence_snapshot_id=acquisition['evidence_snapshot_id'], report_input_digest=pinned['sha256'] if pinned else None)
+        if problems:
+            raise OperationFailure('VERIFICATION_FAILED', 'report companions failed semantic verification: ' + '; '.join(problems))
     remaining = []
     for name, review in sorted(verification['reviews'].items()):
         if review['state'] != 'PASS':
@@ -499,7 +513,8 @@ def op_finalize(ctx: Ctx) -> dict[str, bytes]:
         'mission_baseline.json': {'run_id': ctx.mission_id, 'as_of_utc': ctx.as_of, 'decision_question': spec['decision_question'],
                                   'research_horizon': spec['research_horizon'], 'instruments': spec['instruments'],
                                   'required_provider_operations': [o['operation_id'] for o in spec['provider_operations'] if o['required']],
-                                  'spec_digest': spec_digest(spec)},
+                                  'spec_digest': spec_digest(spec),
+                                  **({'render_contract': reporting.LEGACY_RENDER_CONTRACT} if legacy else {})},
         'provider_attempts.json': {'attempts': acquisition['attempts']},
         'evidence.json': {'references': verification['evidence_references']},
         'metrics.json': {'metrics': []},
@@ -519,10 +534,17 @@ def op_finalize(ctx: Ctx) -> dict[str, bytes]:
     ctx.fail_at('during_final_verify')
     ctx.out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=ctx.out, prefix='.finalize-') as scratch:
-        for name, data in blobs.items():
+        for name, data in {**blobs, **companions}.items():
             (Path(scratch) / name).write_bytes(data)
         result = verify_bundle(Path(scratch), archive=ctx.archive_path)
-    result['report_companions'] = {'state': 'PASS', 'checked': ['report_content.json', 'report_manifest.json', 'report.md', 'report.html']}
+        # the very verdict scripts/verify_mission.py and history compute from the finished bundle (M3-09)
+        verdict = reporting.verify_bundle_companions(scratch, ctx.archive_path)
+    expected = 'ABSENT_DECLARED_V1' if legacy else 'SEMANTICALLY_VERIFIED'
+    if verdict['status'] != expected:
+        raise OperationFailure('VERIFICATION_FAILED', f'assembled bundle companions are {verdict["status"]}, expected {expected}: '
+                               + '; '.join(verdict['problems']))
+    result['report_companions'] = {'state': 'PASS', 'verdict': verdict['status'],
+                                   'checked': [] if legacy else list(reporting.COMPANION_FILES)}
     blobs['final_verification.json'] = _j(result)
     blobs.update(companions)  # versioned companions travel with the bundle but are not part of research-mission.v2 artifacts
     return blobs
@@ -623,6 +645,19 @@ class MissionCoordinator:
             except sqlite3.IntegrityError:
                 pass  # concurrent creator won the race
 
+    def render_is_legacy(self, mission_id: str) -> bool:
+        """True when RENDERING completed under ``render.local_report@1`` (a pre-P2 mission). Such a mission keeps its
+        verified v1 contract end to end: finalized without companions and *declared* so in the signed-by-digest
+        baseline. It is never reinterpreted as a v2 render, and a v2 render never takes this path. A v1 stage whose
+        committed outputs are anything but exactly report.md/report.html is refused (RENDER_V1_OUTPUT_INVALID)."""
+        row = self._stages(mission_id)['RENDERING']
+        if row['status'] not in STAGE_DONE or row['operation_version'] != LEGACY_RENDER_VERSION:
+            return False
+        refs = json.loads(row['output_json']) if row['output_json'] else {}
+        if set(refs) != set(LEGACY_RENDER_OUTPUTS):
+            raise MissionError('RENDER_V1_OUTPUT_INVALID', f'RENDERING@1 committed {sorted(refs)}; expected {sorted(LEGACY_RENDER_OUTPUTS)}')
+        return True
+
     def _read_output(self, mission_id: str, stage_id: str, name: str) -> bytes:
         spec, _ = self._mission(mission_id)
         row = self._stages(mission_id)[stage_id]
@@ -657,6 +692,7 @@ class MissionCoordinator:
             if summary['status'] != 'CONSUMED' or summary['result_digest'] != pinned:
                 raise OperationFailure('STAGE_PRECONDITION_FAILED', 'experiment result differs from the digest pinned in the spec')
             out.update(holdout_result='REFERENCED', result_digest=pinned, independent_evaluation=summary['independent_evaluation'],
+                       independence_scope=summary['independence_scope'], independence=summary['independence'],
                        holdout_exposure_count=summary['holdout_exposure_count'],
                        recovered_after_interruption=summary['recovered_after_interruption'])
         return out
@@ -830,7 +866,10 @@ class MissionCoordinator:
             raise OperationFailure('OPERATION_ERROR', f'{type(exc).__name__}', retryable=True) from exc
         except Exception as exc:  # noqa: BLE001 - unclassified operation bug: fail closed, record type only
             raise OperationFailure('OPERATION_ERROR', type(exc).__name__) from exc
-        if set(outputs) != set(STAGE_OUTPUTS[stage_id]):
+        expected_outputs = set(STAGE_OUTPUTS[stage_id])
+        if stage_id == 'FINALIZING' and self.render_is_legacy(mission_id):
+            expected_outputs -= set(COMPANION_OUTPUTS)
+        if set(outputs) != expected_outputs:
             raise OperationFailure('STAGE_POSTCONDITION_FAILED', f'{stage_id} produced unexpected or missing artifacts')
         for name, data in outputs.items():
             if name.endswith('.json'):
@@ -983,7 +1022,12 @@ class MissionCoordinator:
         self._ensure_job(mission_id, spec)
         state = self.jobs.get(mission_id)['state']
         if state in JOB_TERMINAL or state == 'NEW':
-            return self._result(mission_id, 'NOTHING_TO_RECONCILE')
+            note = []
+            if state in JOB_TERMINAL:  # reconciliation resumes interrupted work; it never reopens a terminal job
+                note = [{'code': 'JOB_TERMINAL_NOT_REPAIRABLE',
+                         'message': f'job is {state}; reconcile_mission does not repair terminal jobs. Create a new mission '
+                                    '(a mission rendered under render.local_report@1 now finalizes under its v1 contract)'}]
+            return self._result(mission_id, 'NOTHING_TO_RECONCILE', None, note)
         stages = self._stages(mission_id)
         running = next((s for s in STAGES if stages[s]['status'] == 'RUNNING'), None)
         bad = self._completed_stage_problems(mission_id, spec)

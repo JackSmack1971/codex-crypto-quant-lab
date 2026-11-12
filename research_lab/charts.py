@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 from statistics import median
 from typing import Any
 
-from .core import ContractError, _utc, digest
+from .core import ContractError, _utc, digest, instant_key
 
 CHART_SCHEMA = 'research-chart-spec.v1'
 CHART_RENDERER_VERSION = '1'
@@ -87,7 +87,7 @@ def _series_samples(series: dict, observations: dict[str, dict], eligible: set[s
     if len({r['unit'] for r in rows}) != 1:
         raise ChartError('CHART_UNIT_MISMATCH', 'a series mixes units')
     rows.sort(key=lambda r: _utc(r['observed_at_utc']))
-    if len({r['observed_at_utc'] for r in rows}) != len(rows):
+    if len({instant_key(r['observed_at_utc']) for r in rows}) != len(rows):
         raise ChartError('CHART_ORDER_INVALID', 'two samples share one observation time; the series is ambiguous')
     return rows
 
@@ -168,7 +168,7 @@ def _svg(chart_id: str, title: str, desc: str, groups: list[list[dict]], labels:
         if len(run) > 1:
             parts.append(f'<polyline points="{" ".join(run)}" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="{DASHES[si % 4]}"/>')
         parts.extend(_marker(MARKERS[si % 4], *xy(r)) for r in rows)
-    parts.append(f'<text x="{width - right}" y="{height - bottom + 16}" text-anchor="end" font-size="11">{esc(max(r["observed_at_utc"] for g in groups for r in g))}</text>')
+    parts.append(f'<text x="{width - right}" y="{height - bottom + 16}" text-anchor="end" font-size="11">{esc(max((r["observed_at_utc"] for g in groups for r in g), key=lambda t: (instant_key(t), t)))}</text>')
     parts.append('</svg>')
     return ''.join(parts)
 
@@ -229,7 +229,7 @@ def build_chart(spec: Any, observations: dict[str, dict], eligible: set[str], as
                 'recorded_value': _fmt(r['raw']), 'recorded_unit': r['unit'], 'plotted_value': _fmt(shown(r))}
                for lab, g in zip(labels, groups) for r in g]
     all_rows = [r for g in groups for r in g]
-    stamps = sorted(r['observed_at_utc'] for r in all_rows)
+    stamps = sorted((r['observed_at_utc'] for r in all_rows), key=lambda t: (instant_key(t), t))
     version = TRANSFORMS[transform][0]
     meta = {
         'chart_id': chart_id, 'chart_type': kind, 'title': spec['title'], 'status': 'AVAILABLE',

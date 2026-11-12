@@ -205,7 +205,9 @@ class MissionLinkTests(Base):
         content['claims'] = 5
         (bundle / 'report_content.json').write_text(json.dumps(content))
         new, _ = self.run_mission('m2', as_of='2026-01-02T12:00:00Z', rows=day2_rows())
-        self.assertEqual(self.history.compare_missions(bundle, new)['metrics']['status'], 'NOT_AVAILABLE')
+        with self.assertRaises(HistoryError) as ctx:   # a tampered companion makes the bundle INVALID: refused, not compared
+            self.history.compare_missions(bundle, new)
+        self.assertEqual(ctx.exception.code, 'BUNDLE_INVALID')
 
     def test_mission_comparison_preserves_each_as_of_and_flags_units(self):
         old, old_archive = self.run_mission('m1')

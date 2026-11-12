@@ -88,7 +88,7 @@ def main() -> int:
         if not (ROOT/'tests'/name).is_file():errors.append('missing new test '+name)
     for rel in ('quant_free_mcp/acquisition.py','research_lab/completion.py','research_lab/mission_integrity.py','scripts/check_dependencies.py',
                 'research_lab/mission_spec.py','research_lab/mission_coordinator.py','research_lab/experiment_registry.py','scripts/mission.py',
-                'research_lab/reporting.py','research_lab/charts.py','research_lab/history.py','research_lab/benchmarks.py','scripts/benchmark.py'):
+                'research_lab/reporting.py','research_lab/charts.py','research_lab/history.py','research_lab/benchmarks.py','research_lab/benchmark_mutations.py','scripts/benchmark.py'):
         module=ROOT/rel
         if not module.is_file():errors.append('missing P0 module '+rel);continue
         try:ast.parse(module.read_text(encoding='utf-8'),filename=str(module))
@@ -96,7 +96,7 @@ def main() -> int:
     for rel in ('.github/workflows/ci.yml','.github/workflows/live-providers.yml','constraints-ci.txt','tests/test_acquisition.py','tests/test_mission_integrity.py','tests/live/test_live_providers.py',
                 'tests/test_p0_regressions.py','tests/test_mission_coordinator.py','tests/test_mission_recovery.py',
                 'tests/test_experiment_registry.py','tests/test_mission_e2e.py','tests/p1_support.py',
-                'tests/test_report_composition.py','tests/test_charts.py','tests/test_history.py','tests/test_benchmarks.py','benchmarks/suite.json'):
+                'tests/test_report_composition.py','tests/test_charts.py','tests/test_history.py','tests/test_benchmarks.py','tests/test_corrective_repair.py','tests/test_qualification_hardening.py','benchmarks/suite.json'):
         if not (ROOT/rel).is_file():errors.append('missing P0 qualification file '+rel)
     try:
         manifest=json.loads((ROOT/'PACKAGE-MANIFEST.json').read_text(encoding='utf8'))

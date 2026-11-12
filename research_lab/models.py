@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
-from .core import Observation, ResearchSignal, ContractError, _decimal, _utc, digest
+from .core import Observation, ResearchSignal, ContractError, _decimal, _utc, digest, instant_key
 
 MODEL_KINDS=('signed_scalar','difference_scaled')
 
@@ -41,7 +41,7 @@ def calculate_model(model: ModelSpec, observations: list[Observation],
     qualified.sort(key=lambda o:(_utc(o.observed_at_utc),o.id))
     n=1 if model.kind=='signed_scalar' else 2
     selected=qualified[-n:]
-    sufficient=len(selected)==n and len({o.observed_at_utc for o in selected})==n
+    sufficient=len(selected)==n and len({instant_key(o.observed_at_utc) for o in selected})==n
     if sufficient:
         if model.kind=='signed_scalar':
             value=_decimal(selected[-1].value)/_decimal(model.scale)

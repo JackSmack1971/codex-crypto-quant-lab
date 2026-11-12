@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))
 from research_lab import benchmarks  # noqa: E402
 from research_lab.benchmarks import BenchmarkError, DIMENSIONS, repeat_suite, run_suite  # noqa: E402
 
-REQUIRED_SCENARIOS = [f'B{i:02d}' for i in range(1, 26)]   # B01-B22 required by the brief; B23-B25 added after independent review
+REQUIRED_SCENARIOS = [f'B{i:02d}' for i in range(1, 32)]   # B01-B22 required by the brief; B23-B25 added after independent review; B26-B31 corrective repair
 
 
 class SuiteTests(unittest.TestCase):
