@@ -1,0 +1,165 @@
+{
+  "as_of_utc": "2026-11-11T16:00:00Z",
+  "bars": [
+    {
+      "available_at_utc": "2026-11-11T15:00:00Z",
+      "close": "100",
+      "closed_at_utc": "2026-11-11T15:00:00Z",
+      "instrument_id": "binance:spot:BTCUSDT"
+    },
+    {
+      "available_at_utc": "2026-11-11T16:00:00Z",
+      "close": "101",
+      "closed_at_utc": "2026-11-11T16:00:00Z",
+      "instrument_id": "binance:spot:BTCUSDT"
+    }
+  ],
+  "models": [
+    {
+      "id": "momentum",
+      "kind": "signed_scalar",
+      "max_age_seconds": 3600,
+      "metric": "momentum",
+      "unit": "dimensionless"
+    }
+  ],
+  "observations": [
+    {
+      "available_at_utc": "2026-11-11T15:00:00Z",
+      "id": "o",
+      "instrument_id": "binance:spot:BTCUSDT",
+      "method": "provider-reported",
+      "metric": "momentum",
+      "observed_at_utc": "2026-11-11T15:00:00Z",
+      "retrieved_at_utc": "2026-11-11T15:00:00Z",
+      "source_uri": "synthetic://offline-fixture",
+      "status": "OBSERVED",
+      "unit": "dimensionless",
+      "value": "0.4"
+    }
+  ],
+  "run_id": "synthetic-example-01",
+  "schema": "research-run-input.v1",
+  "signals": [],
+  "strategy": {
+    "id": "test",
+    "model_weights": [
+      [
+        "momentum",
+        "1"
+      ]
+    ]
+  },
+  "validation": {
+    "candidate_period_returns": {
+      "control-demo": [
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005,
+        0.005
+      ],
+      "momentum-demo": [
+        0.01,
+        -0.02,
+        0.01,
+        0.03,
+        -0.01,
+        0.02,
+        -0.02,
+        0.01,
+        0.02,
+        -0.01,
+        0.01,
+        0.03,
+        -0.03,
+        0.01,
+        0.02,
+        0
+      ]
+    },
+    "embargo": 1,
+    "label_windows": [
+      {
+        "end_utc": "2026-01-01T00:00:00Z",
+        "start_utc": "2026-01-01T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-02T00:00:00Z",
+        "start_utc": "2026-01-02T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-03T00:00:00Z",
+        "start_utc": "2026-01-03T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-04T00:00:00Z",
+        "start_utc": "2026-01-04T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-05T00:00:00Z",
+        "start_utc": "2026-01-05T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-06T00:00:00Z",
+        "start_utc": "2026-01-06T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-07T00:00:00Z",
+        "start_utc": "2026-01-07T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-08T00:00:00Z",
+        "start_utc": "2026-01-08T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-09T00:00:00Z",
+        "start_utc": "2026-01-09T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-10T00:00:00Z",
+        "start_utc": "2026-01-10T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-11T00:00:00Z",
+        "start_utc": "2026-01-11T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-12T00:00:00Z",
+        "start_utc": "2026-01-12T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-13T00:00:00Z",
+        "start_utc": "2026-01-13T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-14T00:00:00Z",
+        "start_utc": "2026-01-14T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-15T00:00:00Z",
+        "start_utc": "2026-01-15T00:00:00Z"
+      },
+      {
+        "end_utc": "2026-01-16T00:00:00Z",
+        "start_utc": "2026-01-16T00:00:00Z"
+      }
+    ],
+    "n_groups": 4,
+    "n_test_groups": 2,
+    "pbo_groups": 8,
+    "test_size": 2,
+    "train_size": 6
+  }
+}

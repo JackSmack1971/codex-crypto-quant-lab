@@ -1,0 +1,75 @@
+{
+  "schema": "quant-capabilities.v1",
+  "research_only": true,
+  "local_mcp": {
+    "name": "quant_free_local",
+    "status": "requires_dependency_install_and_mcp_smoke",
+    "transport": "stdio",
+    "providers": [
+      "binance_spot",
+      "binance_usdm",
+      "defillama",
+      "dexscreener",
+      "mempool"
+    ],
+    "auth": "none",
+    "methods": [
+      "GET"
+    ]
+  },
+  "remote_existing": {
+    "note": "Refer to preserved global config; disabled endpoints remain disabled. Never infer entitlement/health from registration.",
+    "disabled_trading_routes": [
+      "jupiter",
+      "lifi"
+    ]
+  },
+  "fallback_rules": [
+    {
+      "metric": "binance.spot.spread",
+      "primary": "binance.bookTicker",
+      "fallback": "binance.depth with same symbol",
+      "forbidden": "dex_pool_price"
+    },
+    {
+      "metric": "binance.spot.imbalance",
+      "primary": "binance.depth",
+      "fallback": "fresh same-source cache only",
+      "forbidden": "dex_liquidity"
+    },
+    {
+      "metric": "binance.usdm.funding",
+      "primary": "binance.premiumIndex",
+      "fallback": "none; alternate venue is comparison only"
+    },
+    {
+      "metric": "protocol.tvl",
+      "primary": "defillama.protocol",
+      "fallback": "same-source fresh verified cache only",
+      "forbidden": "token.market_cap"
+    },
+    {
+      "metric": "dex.pool.liquidity",
+      "primary": "dexscreener.exact_pair",
+      "fallback": "same-chain+pair verified DexPaprika if explicitly installed",
+      "forbidden": "symbol search"
+    },
+    {
+      "metric": "bitcoin.fees",
+      "primary": "mempool.fees",
+      "fallback": "none",
+      "forbidden": "hardcoded live fees"
+    }
+  ],
+  "local_quant_scripts": {
+    "status": "bundled_requires_optional_quant_dependencies",
+    "mcp_exposed": false,
+    "programs": [
+      "src/market_data.py",
+      "src/indicators.py",
+      "src/backtest.py"
+    ],
+    "standalone_investigation": "src/edge_forensics.py",
+    "data_contract": "verified_ohlcv_csv_plus_sha256_sidecar"
+  }
+}

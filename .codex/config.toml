@@ -1,0 +1,10 @@
+# Applies only in a trusted project, subject to installed Codex version and managed requirements.
+# Deliberately does NOT duplicate/override the user's global crypto MCP servers.
+model_reasoning_effort = "high"
+approval_policy = "on-request"
+# Legacy sandbox mode intentionally omitted; use permission profiles after local conformance.
+default_permissions = ":workspace"
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+interrupt_message = true

@@ -1,0 +1,9 @@
+# Provenance / audit
+Write local `reports/<run-id>/manifest.json` only when a report is requested. Record task_id, UTC start/end, actual model/CLI version if observed, sources with observation and retrieval times, tool/provider, endpoint, cache state, sample coverage, method/version, calculated output digest, missing-data reasons, validation commands and observed outcomes. Missing fields explicitly `null`/`not_run`. This custom manifest is not a native Codex audit log or cryptographically immutable witness. Keep raw prompts, secrets and private query contents out of telemetry. OpenTelemetry may be enabled separately in user-managed config; do not export raw user prompts by default. Timestamp source separately from retrieval; never infer source time from download time.
+
+## Optional research lineage
+The custom `research_lab.ResearchLedger` records ordered canonical SHA-256 records with a `previous_hash` pointer, duplicate-ID protection and replay verification. It is local, single-writer and not a durable externally anchored audit store. Record research method version, source IDs, availability cutoff, report/fixture digest and validation results in payload when used; avoid secret-bearing material. Distinguish recorded evidence from model narrative.
+
+
+## Transactional research event tracking (v2.3)
+`TransactionalResearchLedger` uses SQLite transactions with a unique run ID and hash-linked sequence. `EvidenceArchive` stores immutable observation IDs, full canonical contents, and validated frozen dataset snapshots. Store method/source/tool identifiers, input/output digests, validation state and a separately retained `anchor()` receipt in the result manifest. Local hash checks establish byte-sequence integrity relative to retained anchors, not provider truth or independent immutability. A completed DB transaction is not a confirmed external effect, and the evidence archive and ledger commits are not one atomic transaction.

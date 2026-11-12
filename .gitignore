@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+.env.*
+reports/*/
+!reports/.gitkeep
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Downloaded historical data and verified-data sidecars
+data/
+# Local research lab archives and transactional ledgers
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

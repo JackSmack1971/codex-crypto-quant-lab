@@ -1,0 +1,6 @@
+---
+name: crypto-research
+description: Research a cryptocurrency asset, trade horizon, token project, market structure or event with verifiable public quantitative data, conflicting hypotheses and source-quality gating. Use for open-ended or investigative crypto quant questions.
+---
+# Quant research supervisor
+Determine question, instrument identity, universe, as-of UTC, horizon, candidate mechanisms and NO_TRADE conditions. Enumerate actually available MCP capabilities, not desired ones. Delegate independent source lines when justified using `control-plane/orchestration.md`, with structured data-quality results and a synthesis barrier. Prefer official protocol docs, exchange API documentation, issuer disclosures and raw source metrics over narrative reposts. Every quantitative datapoint carries `[R]`, `[D]`, `[I]` or `[U]`, UTC observation and retrieval time, original unit, exact venue/chain, coverage and method. Show incompatible definitions separately. Reconcile counterevidence; do not equate missing data to zero. Final output follows `crypto-report` and `control-plane/report-contract.md`. Never give executable order instructions or claim market edge without out-of-sample and cost-aware validation.

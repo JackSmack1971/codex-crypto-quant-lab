@@ -1,0 +1,97 @@
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+
+[mcp_servers.coingecko]
+url = "https://mcp.api.coingecko.com/mcp"
+tool_timeout_sec = 60.0
+
+[mcp_servers.coinpaprika]
+url = "https://mcp.coinpaprika.com/streamable-http"
+tool_timeout_sec = 60.0
+
+[mcp_servers.blockscout]
+url = "https://mcp.blockscout.com/mcp"
+tool_timeout_sec = 60.0
+
+[mcp_servers.blockscout.env_http_headers]
+Blockscout-MCP-Pro-Api-Key = "BLOCKSCOUT_PRO_API_KEY"
+
+[mcp_servers.archive_0x]
+url = "https://mcp.0xarchive.io/mcp"
+tool_timeout_sec = 90.0
+
+[mcp_servers.massive]
+url = "https://mcp.massive.com/"
+tool_timeout_sec = 90.0
+
+[mcp_servers.coinmarketcap]
+url = "https://mcp.coinmarketcap.com/mcp"
+enabled = false
+tool_timeout_sec = 60.0
+
+[mcp_servers.coinmarketcap.env_http_headers]
+X-CMC-MCP-API-KEY = "CMC_MCP_API_KEY"
+
+[mcp_servers.fin_data]
+command = "npx"
+args = ["-y", "github:CohenD/fin-data-mcp"]
+startup_timeout_sec = 120.0
+tool_timeout_sec = 90.0
+
+[mcp_servers.coinvest_research]
+url = "https://coinvest-chat.liquid.trade"
+enabled = false
+tool_timeout_sec = 90.0
+
+
+# Free public research MCP endpoints. Provider-side quotas may apply.
+[mcp_servers.dexpaprika]
+url = "https://mcp.dexpaprika.com/streamable-http"
+tool_timeout_sec = 60.0
+
+[mcp_servers.crypto_com_market]
+url = "https://mcp.crypto.com/market-data/mcp"
+tool_timeout_sec = 60.0
+
+[mcp_servers.etherscan_keyless]
+url = "https://mcp-keyless.etherscan.io/mcp"
+tool_timeout_sec = 60.0
+
+[mcp_servers.solana_explorer]
+url = "https://explorer.solana.com/mcp"
+tool_timeout_sec = 60.0
+
+[mcp_servers.aave]
+url = "https://mcp.aave.com"
+tool_timeout_sec = 60.0
+
+[mcp_servers.morpho]
+url = "https://mcp.morpho.org/"
+tool_timeout_sec = 120.0
+
+[mcp_servers.gate_market]
+url = "https://api.gatemcp.ai/mcp"
+tool_timeout_sec = 60.0
+
+# Optional trading/routing-capable services; disabled for research-only use.
+[mcp_servers.jupiter]
+url = "https://mcp.jup.ag"
+enabled = false
+tool_timeout_sec = 60.0
+
+[mcp_servers.lifi]
+url = "https://mcp.li.quest/mcp"
+enabled = false
+tool_timeout_sec = 60.0
+
+[tui]
+screen_reader_detection_done = true
+
+[tui.model_availability_nux]
+"gpt-6.1-sol" = 1
+
+[projects.'c:\test-repos\quant-analysis']
+trust_level = "trusted"
+
+[windows]
+sandbox = "elevated"
